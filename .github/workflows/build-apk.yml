@@ -50,6 +50,17 @@ jobs:
           PROJECT_DIR=$(dirname "$SETTINGS")
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
+      - name: Fix Kotlin plugin for AGP 9
+        run: |
+          FILE=$(find "$PROJECT_DIR" -path '*/app/build.gradle.kts' -type f | head -1)
+          if [ -z "$FILE" ]; then
+            echo "app/build.gradle.kts not found"
+            exit 1
+          fi
+          sed -i "/org.jetbrains.kotlin.android/d" "$FILE"
+          echo "Updated $FILE"
+          sed -n '1,80p' "$FILE"
+
       - name: Build APK
         run: |
           cd "$PROJECT_DIR"
