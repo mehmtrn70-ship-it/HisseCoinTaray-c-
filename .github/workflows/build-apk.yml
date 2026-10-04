@@ -58,6 +58,7 @@ jobs:
             exit 1
           fi
           sed -i "/org.jetbrains.kotlin.android/d" "$FILE"
+          sed -i '1i plugins { id("com.android.application") }' "$FILE"
           echo "Updated $FILE"
           sed -n '1,80p' "$FILE"
 
