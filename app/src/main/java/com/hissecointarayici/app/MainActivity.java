@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
             ArrayList<Quote> data = new ArrayList<>();
             for (int i=0;i<stocks.length;i++) {
                 try { data.add(fetchYahoo(stocks[i], stockNames[i])); }
-                catch (Exception e) { data.add(new Quote(stockNames[i], "Veri alınamadı", 0, 0, 0)); }
+                catch (Exception e) { data.add(new Quote(stockNames[i], "Veri alınamadı", 0, 0, 50, 0)); }
             }
             runOnUiThread(() -> showQuotes(data, "BIST"));
         });
@@ -103,7 +103,7 @@ public class MainActivity extends Activity {
             ArrayList<Quote> data = new ArrayList<>();
             for (String s: coins) {
                 try { data.add(fetchBinance(s)); }
-                catch (Exception e) { data.add(new Quote(s.replace("USDT",""), "Veri alınamadı", 0, 0, 0)); }
+                catch (Exception e) { data.add(new Quote(s.replace("USDT",""), "Veri alınamadı", 0, 0, 50, 0)); }
             }
             runOnUiThread(() -> showQuotes(data, "KRİPTO"));
         });
