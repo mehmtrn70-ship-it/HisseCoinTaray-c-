@@ -16,14 +16,14 @@ jobs:
           java-version: '17'
       - name: Android SDK
         run: |
-          SDKMANAGER=$(command -v sdkmanager)
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -name sdkmanager -type f | head -1)
+          test -n "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
-      - name: Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.7.1'
       - name: Check
         run: |
+          find /usr/local/lib/android/sdk -maxdepth 3 -type d | head -30
           java -version
-          sdkmanager --list | head -20
