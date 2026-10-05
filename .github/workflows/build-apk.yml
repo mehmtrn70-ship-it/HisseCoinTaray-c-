@@ -53,16 +53,44 @@ jobs:
       - name: Fix Android project for AGP 9
         run: |
           FILE=$(find "$PROJECT_DIR" -path '*/app/build.gradle.kts' -type f | head -1)
+          MANIFEST=$(find "$PROJECT_DIR" -path '*/app/src/main/AndroidManifest.xml' -type f | head -1)
           if [ -z "$FILE" ]; then
             echo "app/build.gradle.kts not found"
             exit 1
           fi
+          if [ -z "$MANIFEST" ]; then
+            echo "AndroidManifest.xml not found"
+            exit 1
+          fi
+
           sed -i "/org.jetbrains.kotlin.android/d" "$FILE"
           sed -i '1i plugins { id("com.android.application") }' "$FILE"
           sed -i 's/compileSdk = 35/compileSdk = 36/' "$FILE"
           sed -i 's/targetSdk = 35/targetSdk = 36/' "$FILE"
-          echo "Updated $FILE"
-          sed -n '1,80p' "$FILE"
+
+          cat > "$MANIFEST" <<'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        android:allowBackup="true"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.HisseCoinTarayici">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
+
+          echo "Updated Gradle file: $FILE"
+          echo "Replaced manifest: $MANIFEST"
+          sed -n '1,80p' "$MANIFEST"
 
       - name: Build APK
         run: |
