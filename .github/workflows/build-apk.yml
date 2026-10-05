@@ -40,7 +40,18 @@ jobs:
           sed -i 's/targetSdk = 35/targetSdk = 36/g' "$FILE"
           echo "--- app build file ---"
           sed -n '1,80p' "$FILE"
+      - name: Fix manifest
+        run: |
+          MANIFEST=$(find "$PROJECT_DIR" -path "*/app/src/main/AndroidManifest.xml" -type f | head -1)
+          test -n "$MANIFEST"
+          sed -i 's/android:label="[^"]*"/android:label="HisseCoin Tarayici"/' "$MANIFEST"
       - name: Build
         run: |
           cd "$PROJECT_DIR"
           gradle assembleDebug --no-daemon --stacktrace
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: HisseCoinTarayici-APK
+          path: project/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
