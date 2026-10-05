@@ -36,6 +36,8 @@ jobs:
           FILE=$(find "$PROJECT_DIR" -path '*/app/build.gradle.kts' -type f | head -1)
           test -n "$FILE"
           sed -i 's/id("org.jetbrains.kotlin.android")/ /g' "$FILE"
+          sed -i 's/compileSdk = 35/compileSdk = 36/g' "$FILE"
+          sed -i 's/targetSdk = 35/targetSdk = 36/g' "$FILE"
           echo "--- app build file ---"
           sed -n '1,80p' "$FILE"
       - name: Build
