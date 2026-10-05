@@ -25,10 +25,20 @@ jobs:
           gradle-version: '9.7.1'
       - name: Extract
         run: |
+          rm -rf project
           mkdir project
           unzip -q HisseCoinTarayici_Android_APK_Uretim.zip -d project
-          find project -type f | sort
+          SETTINGS=$(find project -name settings.gradle.kts -type f | head -1)
+          test -n "$SETTINGS"
+          echo "PROJECT_DIR=$(dirname "$SETTINGS")" >> "$GITHUB_ENV"
+      - name: Fix Kotlin plugin
+        run: |
+          FILE=$(find "$PROJECT_DIR" -path '*/app/build.gradle.kts' -type f | head -1)
+          test -n "$FILE"
+          sed -i 's/id("org.jetbrains.kotlin.android")/ /g' "$FILE"
+          echo "--- app build file ---"
+          sed -n '1,80p' "$FILE"
       - name: Build
         run: |
-          cd project
+          cd "$PROJECT_DIR"
           gradle assembleDebug --no-daemon --stacktrace
