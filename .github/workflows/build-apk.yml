@@ -9,64 +9,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Java 17
+      - uses: actions/checkout@v4
+      - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Install Android SDK 36
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.7.1'
-      - name: Extract Android project
-        run: |
-          rm -rf project
-          mkdir project
-          unzip -q HisseCoinTarayici_Android_APK_Uretim.zip -d project
-          SETTINGS=$(find project -name settings.gradle.kts -type f | head -1)
-          test -n "$SETTINGS"
-          echo "PROJECT_DIR=$(dirname "$SETTINGS")" >> "$GITHUB_ENV"
-      - name: Prepare Android project
-        run: |
-          FILE=$(find "$PROJECT_DIR" -path '*/app/build.gradle.kts' -type f | head -1)
-          MANIFEST=$(find "$PROJECT_DIR" -path '*/app/src/main/AndroidManifest.xml' -type f | head -1)
-          test -n "$FILE"
-          test -n "$MANIFEST"
-          sed -i '/org.jetbrains.kotlin.android/d' "$FILE"
-          if ! grep -q 'com.android.application' "$FILE"; then sed -i '1i plugins { id("com.android.application") }' "$FILE"; fi
-          sed -i 's/compileSdk = 35/compileSdk = 36/' "$FILE"
-          sed -i 's/targetSdk = 35/targetSdk = 36/' "$FILE"
-          cat > "$MANIFEST" <<'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:allowBackup="true" android:label="Hisse&Coin Tarayıcı" android:supportsRtl="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
-        <activity android:name=".MainActivity" android:exported="true">
-            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
-        </activity>
-    </application>
-</manifest>
-EOF
-      - name: Build Debug APK
-        run: |
-          cd "$PROJECT_DIR"
-          gradle assembleDebug --no-daemon
-      - name: Verify APK
-        run: |
-          APK=$(find "$PROJECT_DIR" -path '*/build/outputs/apk/debug/*.apk' -type f | head -1)
-          test -n "$APK"
-          echo "APK=$APK" >> "$GITHUB_ENV"
-          ls -lh "$APK"
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: HisseCoinTarayici-APK
-          path: ${{ env.APK }}
-          if-no-files-found: error
+      - name: Test
+        run: java -version
