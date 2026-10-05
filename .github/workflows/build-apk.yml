@@ -15,5 +15,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Test
-        run: java -version
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Test SDK
+        run: sdkmanager --version
