@@ -353,16 +353,64 @@ public class MainActivity extends Activity {
         if(Double.isNaN(price) && !c.isEmpty()) price=c.get(c.size()-1);
         double prev=c.size()>1?c.get(c.size()-2):price;
         double change=prev!=0?(price-prev)*100/prev:0;
-        return new Quote(name,format(price),price,change,rsi(c),sma(c,20));
+        ArrayList<Double> highs=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("high"));
+        ArrayList<Double> lows=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("low"));
+        double a=atr(highs,lows,c,14), sup=recentLow(lows,20), res=recentHigh(highs,20);
+        return new Quote(name,format(price),price,change,rsi(c),sma(c,20),a,sup,res);
     }
 
     private Quote fetchBinance(String symbol) throws Exception {
         JSONObject t=getJson("https://api.binance.com/api/v3/ticker/24hr?symbol="+symbol);
         double price=t.getDouble("lastPrice"), change=t.getDouble("priceChangePercent");
         JSONArray k=getJsonArray("https://api.binance.com/api/v3/klines?symbol="+symbol+"&interval=1d&limit=60");
-        ArrayList<Double> c=new ArrayList<>();
-        for(int i=0;i<k.length();i++) c.add(k.getJSONArray(i).getDouble(4));
-        return new Quote(symbol.replace("USDT",""),format(price),price,change,rsi(c),sma(c,20));
+        ArrayList<Double> c=new ArrayList<>(), highs=new ArrayList<>(), lows=new ArrayList<>();
+        for(int i=0;i<k.length();i++){ JSONArray row=k.getJSONArray(i); highs.add(row.getDouble(2)); lows.add(row.getDouble(3)); c.add(row.getDouble(4)); }
+        double a=atr(highs,lows,c,14), sup=recentLow(lows,20), res=recentHigh(highs,20);
+        return new Quote(symbol.replace("USDT",""),format(price),price,change,rsi(c),sma(c,20),a,sup,res);
+    }
+
+    private String num(double x){ return x>0 ? String.format(Locale.US,"%.4f",x) : "-"; }
+
+    private String planText(Quote q) {
+        if(q.price<=0) return "Planlama için yeterli fiyat verisi yok.";
+        double atr=q.atr>0?q.atr:q.price*0.02;
+        double support=q.support>0?q.support:q.price-atr;
+        double resistance=q.resistance>0?q.resistance:q.price+atr;
+        if(support>=q.price) support=q.price-atr;
+        if(resistance<=q.price) resistance=q.price+atr;
+
+        double entryLow=Math.max(support, q.price-0.60*atr);
+        double entryHigh=Math.min(q.price, support+0.35*atr);
+        if(entryHigh<entryLow) { entryLow=Math.max(0,q.price-0.50*atr); entryHigh=q.price; }
+
+        double stop=Math.max(0,support-0.50*atr);
+        double entry=(entryLow+entryHigh)/2.0;
+        double risk=Math.max(0.00000001,entry-stop);
+        double target1=Math.max(resistance,entry+risk);
+        double target2=Math.max(target1,entry+2*risk);
+        double target3=Math.max(target2,entry+3*risk);
+        double breakout=resistance+0.10*atr;
+        double rr=(target1-entry)/risk;
+
+        String condition;
+        if(q.price<=entryHigh) condition="Fiyat alım bölgesine yakın.";
+        else if(q.price<breakout) condition="Fiyat alım bölgesinin üzerinde; geri çekilme beklemek daha kontrollü.";
+        else condition="Direnç aşılmış; kırılımın kalıcılığı ayrıca izlenmeli.";
+
+        return "ALIM–SATIM PLANLAYICI\\n\\n"+
+                "Alım bölgesi: "+num(entryLow)+" – "+num(entryHigh)+"\\n"+
+                "Kırılım seviyesi: "+num(breakout)+"\\n"+
+                "Hedef 1: "+num(target1)+"\\n"+
+                "Hedef 2: "+num(target2)+"\\n"+
+                "Hedef 3: "+num(target3)+"\\n"+
+                "Zarar-kes: "+num(stop)+"\\n"+
+                "Risk/Getiri (H1): "+String.format(Locale.US,"%.2f",rr)+"R\\n\\n"+
+                "Destek: "+num(support)+"\\n"+
+                "Direnç: "+num(resistance)+"\\n"+
+                "ATR14: "+num(atr)+"\\n\\n"+
+                "Durum: "+condition+"\\n\\n"+
+                "Hesaplama; destek/direnç, ATR14 ve mevcut fiyat kullanılarak dinamik yapılır.\\n"+
+                "Bu bölüm teknik senaryodur, yatırım tavsiyesi değildir.";
     }
 
     private double score(Quote q) {
@@ -403,6 +451,32 @@ public class MainActivity extends Activity {
         return x;
     }
 
+    private double atr(ArrayList<Double> highs, ArrayList<Double> lows, ArrayList<Double> closes, int n) {
+        if(highs.size()<2 || lows.size()<2 || closes.size()<2) return 0;
+        int start=Math.max(1,closes.size()-n);
+        double sum=0; int count=0;
+        for(int i=start;i<closes.size() && i<highs.size() && i<lows.size();i++){
+            double prev=closes.get(i-1);
+            double tr=Math.max(highs.get(i)-lows.get(i),Math.max(Math.abs(highs.get(i)-prev),Math.abs(lows.get(i)-prev)));
+            if(tr>0){sum+=tr;count++;}
+        }
+        return count>0?sum/count:0;
+    }
+
+    private double recentLow(ArrayList<Double> a,int n){
+        if(a.isEmpty()) return 0;
+        int start=Math.max(0,a.size()-n); double v=Double.MAX_VALUE;
+        for(int i=start;i<a.size();i++) if(a.get(i)>0 && a.get(i)<v) v=a.get(i);
+        return v==Double.MAX_VALUE?0:v;
+    }
+
+    private double recentHigh(ArrayList<Double> a,int n){
+        if(a.isEmpty()) return 0;
+        int start=Math.max(0,a.size()-n); double v=0;
+        for(int i=start;i<a.size();i++) if(a.get(i)>v) v=a.get(i);
+        return v;
+    }
+
     private double sma(ArrayList<Double> a,int n) {
         if(a.size()<n)return 0; double s=0; for(int i=a.size()-n;i<a.size();i++)s+=a.get(i); return s/n;
     }
@@ -418,8 +492,9 @@ public class MainActivity extends Activity {
     private String pct(double x){return String.format(Locale.US,"%+.2f%%",x);}
 
     static class Quote {
-        String name,priceText; double price,change,rsi,sma;
-        Quote(String n,String p,double pr,double ch,double r,double s){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;}
+        String name,priceText; double price,change,rsi,sma,atr,support,resistance;
+        Quote(String n,String p,double pr,double ch,double r,double s){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;atr=0;support=0;resistance=0;}
+        Quote(String n,String p,double pr,double ch,double r,double s,double a,double sup,double res){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;atr=a;support=sup;resistance=res;}
     }
 
     static class Scan {
