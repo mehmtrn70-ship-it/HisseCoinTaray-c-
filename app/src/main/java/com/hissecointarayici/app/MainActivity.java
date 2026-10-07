@@ -297,6 +297,7 @@ public class MainActivity extends Activity {
                 "Trend: " + trend + "\n" +
                 "Momentum: " + momentum + "\n\n" +
                 "Neden bu skor?\n" + reasonText(s.q) +
+                "\n\n" + planText(s.q) +
                 "\n\nNot: Bu analiz teknik göstergelere dayanır ve yatırım tavsiyesi değildir.";
 
         new android.app.AlertDialog.Builder(this)
