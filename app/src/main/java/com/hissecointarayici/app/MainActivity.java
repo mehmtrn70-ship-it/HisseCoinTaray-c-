@@ -24,9 +24,11 @@ public class MainActivity extends Activity {
     private TextView status, marketBadge;
     private final ExecutorService pool = Executors.newFixedThreadPool(4);
 
-    private final String[] stocks = {"THYAO.IS","ASELS.IS","TUPRS.IS","AKBNK.IS","GARAN.IS","EREGL.IS","KCHOL.IS","BIMAS.IS","SASA.IS","TCELL"};
-    private final String[] stockNames = {"THYAO","ASELS","TUPRS","AKBNK","GARAN","EREGL","KCHOL","BIMAS","SASA","TCELL"};
-    private final String[] coins = {"BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","AVAXUSDT"};
+    private static final String[] BIST100 = ("ASELS,TUPRS,BIMAS,THYAO,AKBNK,EREGL,YKBNK,KCHOL,ISCTR,SAHOL,TCELL,ASTOR,GARAN,CCOLA,ENKAI,SISE,TAVHL,FROTO,MGROS,SASA,TRALT,EKGYO,AEFES,MPARK,TOASO,KRDMD,PGSUS,GUBRF,HALKB,ENERY,ENJSA,TURSG,PETKM,TTKOM,GLYHO,AGHOL,TRMET,MAVI,TKFEN,VAKBN,TRGYO,OYAKC,AHGAZ,BRSAN,AKSEN,TABGD,DOHOL,ANSGR,SOKM,RGYAS,AYGAZ,ALARK,CIMSA,RYSAS,ULKER,AKSA,ISMEN,DOAS,CVKMD,OTKAR,GLRMK,TSKB,ARCLK,HEKTS,TTRAK,ISDMR,TRENJ,ALBRK,ECILC,CANTE,CWENE,ANHYT,TCKRC,BTCIM,AKFYE,SNGYO,GRSEL,ODAS,BRYAT,EGEEN,ECZYT,BERA,FENER,KCAER,ALTNY,EGGUB,LMKDC,PAHOL,ENTRA,ZOREN,OBAMS,GWIND,KARSN,KORDS,EUREN,BINHO,VESTL,KATMR,AKCNS,ALFAS").split(",");
+    private static final String[] COIN_FALLBACK = {"BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","AVAXUSDT"};
+    private int stockMode=100; // 30 / 50 / 100
+    private int coinMode=100;  // 10 / 50 / 100 / 0=tümü
+    private String universeLabel="BIST 100 + Kripto İlk 100";
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
@@ -77,10 +79,12 @@ public class MainActivity extends Activity {
         Button coinsBtn = makeButton("COİNLER");
         Button scanBtn = makeButton("TARAMA");
         Button refresh = makeButton("YENİLE");
+        Button universeBtn = makeButton("EVREN");
         buttons.addView(stocksBtn);
         buttons.addView(coinsBtn);
         buttons.addView(scanBtn);
         buttons.addView(refresh);
+        buttons.addView(universeBtn);
         root.addView(buttons);
 
         status = new TextView(this);
@@ -98,9 +102,30 @@ public class MainActivity extends Activity {
         coinsBtn.setOnClickListener(v -> loadCoins());
         scanBtn.setOnClickListener(v -> loadScanner());
         refresh.setOnClickListener(v -> loadAll());
+        universeBtn.setOnClickListener(v -> chooseUniverse());
 
         scroll.addView(root);
         setContentView(scroll);
+    }
+
+    private void chooseUniverse() {
+        String[] items={
+                "BIST 30 + Coin İlk 10",
+                "BIST 50 + Coin İlk 50",
+                "BIST 100 + Coin İlk 100",
+                "BIST 100 + Coin Tümü"
+        };
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("🔎 Tarama Evreni")
+                .setItems(items,(d,which)->{
+                    if(which==0){stockMode=30;coinMode=10;universeLabel="BIST 30 + Coin İlk 10";}
+                    else if(which==1){stockMode=50;coinMode=50;universeLabel="BIST 50 + Coin İlk 50";}
+                    else if(which==2){stockMode=100;coinMode=100;universeLabel="BIST 100 + Coin İlk 100";}
+                    else {stockMode=100;coinMode=0;universeLabel="BIST 100 + Coin Tümü";}
+                    status.setText("Seçildi: "+universeLabel);
+                    marketBadge.setText("●  EVREN HAZIR");
+                    setRoundedBackground(marketBadge, Color.rgb(40,125,85), 18);
+                }).show();
     }
 
     private Button makeButton(String text) {
@@ -121,69 +146,90 @@ public class MainActivity extends Activity {
 
     private void loadStocks() {
         list.removeAllViews();
-        status.setText("BIST hisseleri taranıyor...");
-        marketBadge.setText("●  BIST TARAMASI");
+        status.setText("BIST "+stockMode+" hisseleri taranıyor...");
+        marketBadge.setText("●  BIST "+stockMode+" TARAMASI");
         setRoundedBackground(marketBadge, Color.rgb(40,90,155), 18);
         pool.execute(() -> {
+            String[] syms = Arrays.copyOf(BIST100, stockMode);
             ArrayList<Quote> data = new ArrayList<>();
-            for (int i=0;i<stocks.length;i++) {
-                try { data.add(fetchYahoo(stocks[i], stockNames[i])); }
-                catch (Exception e) { data.add(new Quote(stockNames[i], "Veri yok", 0, 0, 50, 0)); }
+            int ok=0;
+            for (int i=0;i<syms.length;i++) {
+                try { data.add(fetchYahoo(syms[i]+".IS", syms[i])); ok++; }
+                catch (Exception ignored) {}
+                final int done=i+1, total=syms.length;
+                runOnUiThread(() -> status.setText("BIST "+stockMode+" taranıyor • "+done+"/"+total));
             }
-            runOnUiThread(() -> showQuotes(data, "BIST"));
+            final int success=ok;
+            runOnUiThread(() -> showQuotes(data, "BIST "+stockMode, success, syms.length));
         });
     }
 
     private void loadCoins() {
         list.removeAllViews();
-        status.setText("Kripto piyasası taranıyor...");
-        marketBadge.setText("●  KRİPTO TARAMASI");
+        status.setText("Binance evreni hazırlanıyor...");
+        marketBadge.setText("●  KRİPTO EVRENİ");
         setRoundedBackground(marketBadge, Color.rgb(115,78,155), 18);
         pool.execute(() -> {
-            ArrayList<Quote> data = new ArrayList<>();
-            for (String s: coins) {
-                try { data.add(fetchBinance(s)); }
-                catch (Exception e) { data.add(new Quote(s.replace("USDT",""), "Veri yok", 0, 0, 50, 0)); }
+            try {
+                String[] syms=discoverCoins(coinMode);
+                ArrayList<Quote> data=new ArrayList<>();
+                int ok=0;
+                for(int i=0;i<syms.length;i++){
+                    try{data.add(fetchBinance(syms[i]));ok++;}catch(Exception ignored){}
+                    final int done=i+1,total=syms.length;
+                    runOnUiThread(() -> status.setText("Kripto taranıyor • "+done+"/"+total));
+                }
+                final int success=ok;
+                runOnUiThread(() -> showQuotes(data, "KRİPTO", success, syms.length));
+            } catch(Exception e) {
+                ArrayList<Quote> data=new ArrayList<>();
+                for(String s:COIN_FALLBACK) try{data.add(fetchBinance(s));}catch(Exception ignored){}
+                runOnUiThread(() -> showQuotes(data, "KRİPTO", data.size(), COIN_FALLBACK.length));
             }
-            runOnUiThread(() -> showQuotes(data, "KRİPTO"));
         });
     }
 
     private void loadScanner() {
         list.removeAllViews();
-        status.setText("Sinyaller ve teknik göstergeler hesaplanıyor...");
-        marketBadge.setText("●  AKILLI TARAMA ÇALIŞIYOR");
+        status.setText("Tüm seçili piyasa evreni taranıyor...");
+        marketBadge.setText("●  AKILLI GENİŞ TARAMA");
         setRoundedBackground(marketBadge, Color.rgb(205,130,35), 18);
         pool.execute(() -> {
             ArrayList<Scan> scans = new ArrayList<>();
-            for (int i=0;i<stocks.length;i++) {
-                try {
-                    Quote q=fetchYahoo(stocks[i], stockNames[i]);
-                    scans.add(new Scan(q, score(q)));
-                } catch(Exception ignored) {}
+            int total=stockMode+1;
+            int done=0;
+            String[] syms=Arrays.copyOf(BIST100, stockMode);
+            for(String s:syms){
+                try{Quote q=fetchYahoo(s+".IS",s);scans.add(new Scan(q,score(q)));}catch(Exception ignored){}
+                final int d=++done;
+                runOnUiThread(() -> status.setText("Hisseler: "+d+"/"+stockMode+" • "+universeLabel));
             }
-            for(String s:coins) {
-                try {
-                    Quote q=fetchBinance(s);
-                    scans.add(new Scan(q, score(q)));
-                } catch(Exception ignored) {}
-            }
+            try{
+                String[] cs=discoverCoins(coinMode);
+                total+=cs.length;
+                for(String s:cs){
+                    try{Quote q=fetchBinance(s);scans.add(new Scan(q,score(q)));}catch(Exception ignored){}
+                    final int d=++done;
+                    runOnUiThread(() -> status.setText("Tarama: "+d+" • "+universeLabel));
+                }
+            }catch(Exception ignored){}
             scans.sort((a,b)->Double.compare(b.score,a.score));
-            runOnUiThread(() -> showScans(scans));
+            final int attempted=done;
+            runOnUiThread(() -> showScans(scans, attempted));
         });
     }
 
-    private void showQuotes(ArrayList<Quote> data, String type) {
+    private void showQuotes(ArrayList<Quote> data, String type, int success, int attempted) {
         list.removeAllViews();
         for (Quote q:data) {
             list.addView(quoteCard(q, type));
         }
-        status.setText(type + " verileri güncellendi • " + data.size() + " varlık");
+        status.setText(type + " verileri güncellendi • " + success + "/" + attempted + " başarılı");
         marketBadge.setText("●  VERİLER GÜNCEL");
         setRoundedBackground(marketBadge, Color.rgb(40,125,85), 18);
     }
 
-    private void showScans(ArrayList<Scan> scans) {
+    private void showScans(ArrayList<Scan> scans, int attempted) {
         list.removeAllViews();
 
         TextView heading = new TextView(this);
@@ -200,7 +246,7 @@ public class MainActivity extends Activity {
             list.addView(scanCard(s, n));
         }
 
-        status.setText("Tarama tamamlandı • " + scans.size() + " varlık analiz edildi");
+        status.setText("Tarama tamamlandı • " + scans.size() + "/" + attempted + " başarılı • " + universeLabel);
         marketBadge.setText("●  TARAMA TAMAMLANDI");
         setRoundedBackground(marketBadge, Color.rgb(40,125,85), 18);
     }
@@ -222,7 +268,8 @@ public class MainActivity extends Activity {
 
         TextView details = new TextView(this);
         details.setText("Fiyat: " + s.q.priceText + "    24s: " + pct(s.q.change) +
-                "    RSI: " + String.format(Locale.US,"%.1f",s.q.rsi));
+                "    RSI: " + String.format(Locale.US,"%.1f",s.q.rsi) +
+                "    MACD: " + String.format(Locale.US,"%.3f",s.q.macd));
         details.setTextSize(14);
         details.setTextColor(Color.rgb(80,85,95));
         details.setPadding(0, 6, 0, 4);
@@ -295,7 +342,9 @@ public class MainActivity extends Activity {
                 "RSI: " + String.format(Locale.US,"%.1f",s.q.rsi) + " — " + rsiText + "\n" +
                 "SMA20: " + (s.q.sma > 0 ? String.format(Locale.US,"%.4f",s.q.sma) : "-") + "\n" +
                 "Trend: " + trend + "\n" +
-                "Momentum: " + momentum + "\n\n" +
+                "Momentum: " + momentum + "\n" +
+                "MACD: " + String.format(Locale.US,"%.4f",s.q.macd) + "\n" +
+                "Hacim gücü: " + String.format(Locale.US,"%.2fx",s.q.volumeRatio) + "\n\n" +
                 "Neden bu skor?\n" + reasonText(s.q) +
                 "\n\n" + planText(s.q) +
                 "\n\nNot: Bu analiz teknik göstergelere dayanır ve yatırım tavsiyesi değildir.";
@@ -356,18 +405,47 @@ public class MainActivity extends Activity {
         double change=prev!=0?(price-prev)*100/prev:0;
         ArrayList<Double> highs=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("high"));
         ArrayList<Double> lows=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("low"));
+        ArrayList<Double> vols=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("volume"));
         double a=atr(highs,lows,c,14), sup=recentLow(lows,20), res=recentHigh(highs,20);
-        return new Quote(name,format(price),price,change,rsi(c),sma(c,20),a,sup,res);
+        return new Quote(name,format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res);
+    }
+
+    private String[] discoverCoins(int limit) throws Exception {
+        JSONObject ex=getJson("https://api.binance.com/api/v3/exchangeInfo");
+        JSONArray syms=ex.getJSONArray("symbols");
+        HashSet<String> allowed=new HashSet<>();
+        for(int i=0;i<syms.length();i++){
+            JSONObject s=syms.getJSONObject(i);
+            if("TRADING".equals(s.optString("status")) &&
+               "USDT".equals(s.optString("quoteAsset")) &&
+               "SPOT".equals(s.optString("isSpotTradingAllowed"))){ }
+            if("TRADING".equals(s.optString("status")) && "USDT".equals(s.optString("quoteAsset")))
+                allowed.add(s.optString("symbol"));
+        }
+        JSONArray tickers=getJsonArray("https://api.binance.com/api/v3/ticker/24hr");
+        ArrayList<String[]> ranked=new ArrayList<>();
+        for(int i=0;i<tickers.length();i++){
+            JSONObject t=tickers.getJSONObject(i);
+            String s=t.optString("symbol");
+            if(!allowed.contains(s)) continue;
+            double vol=t.optDouble("quoteVolume",0);
+            ranked.add(new String[]{s,Double.toString(vol)});
+        }
+        ranked.sort((a,b)->Double.compare(Double.parseDouble(b[1]),Double.parseDouble(a[1])));
+        int take=limit<=0?ranked.size():Math.min(limit,ranked.size());
+        String[] out=new String[take];
+        for(int i=0;i<take;i++)out[i]=ranked.get(i)[0];
+        return out;
     }
 
     private Quote fetchBinance(String symbol) throws Exception {
         JSONObject t=getJson("https://api.binance.com/api/v3/ticker/24hr?symbol="+symbol);
         double price=t.getDouble("lastPrice"), change=t.getDouble("priceChangePercent");
         JSONArray k=getJsonArray("https://api.binance.com/api/v3/klines?symbol="+symbol+"&interval=1d&limit=60");
-        ArrayList<Double> c=new ArrayList<>(), highs=new ArrayList<>(), lows=new ArrayList<>();
-        for(int i=0;i<k.length();i++){ JSONArray row=k.getJSONArray(i); highs.add(row.getDouble(2)); lows.add(row.getDouble(3)); c.add(row.getDouble(4)); }
+        ArrayList<Double> c=new ArrayList<>(), highs=new ArrayList<>(), lows=new ArrayList<>(), vols=new ArrayList<>();
+        for(int i=0;i<k.length();i++){ JSONArray row=k.getJSONArray(i); highs.add(row.getDouble(2)); lows.add(row.getDouble(3)); c.add(row.getDouble(4)); vols.add(row.getDouble(5)); }
         double a=atr(highs,lows,c,14), sup=recentLow(lows,20), res=recentHigh(highs,20);
-        return new Quote(symbol.replace("USDT",""),format(price),price,change,rsi(c),sma(c,20),a,sup,res);
+        return new Quote(symbol.replace("USDT",""),format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res);
     }
 
     private String num(double x){ return x>0 ? String.format(Locale.US,"%.4f",x) : "-"; }
@@ -416,9 +494,12 @@ public class MainActivity extends Activity {
 
     private double score(Quote q) {
         double s=50;
-        if(q.change>2) s+=15; else if(q.change>0) s+=7; else if(q.change<-3) s-=15; else if(q.change<0) s-=7;
-        if(q.rsi>=50 && q.rsi<=68) s+=15; else if(q.rsi>72) s-=10; else if(q.rsi<30) s+=5;
-        if(q.sma>0 && q.price>q.sma) s+=15; else if(q.sma>0) s-=10;
+        if(q.change>3) s+=12; else if(q.change>0) s+=6; else if(q.change<-3) s-=12; else if(q.change<0) s-=6;
+        if(q.rsi>=50 && q.rsi<=68) s+=12; else if(q.rsi>72) s-=10; else if(q.rsi<30) s+=6;
+        if(q.sma>0 && q.price>q.sma) s+=12; else if(q.sma>0) s-=10;
+        if(q.macd>0) s+=10; else if(q.macd<0) s-=6;
+        if(q.volumeRatio>=1.5) s+=8; else if(q.volumeRatio>=1.0) s+=4; else if(q.volumeRatio<0.6) s-=4;
+        if(q.resistance>0 && q.price>q.resistance) s+=8;
         return Math.max(0,Math.min(100,s));
     }
 
@@ -478,6 +559,26 @@ public class MainActivity extends Activity {
         return v;
     }
 
+    private double ema(ArrayList<Double> a,int n) {
+        if(a.isEmpty()) return 0;
+        double e=a.get(0), k=2.0/(n+1);
+        for(int i=1;i<a.size();i++) e=a.get(i)*k+e*(1-k);
+        return e;
+    }
+
+    private double macd(ArrayList<Double> a) {
+        if(a.size()<26) return 0;
+        return ema(a,12)-ema(a,26);
+    }
+
+    private double volumeRatio(ArrayList<Double> v) {
+        if(v.size()<21) return 1.0;
+        double avg=0;
+        for(int i=v.size()-21;i<v.size()-1;i++) avg+=v.get(i);
+        avg/=20.0;
+        return avg>0?v.get(v.size()-1)/avg:1.0;
+    }
+
     private double sma(ArrayList<Double> a,int n) {
         if(a.size()<n)return 0; double s=0; for(int i=a.size()-n;i<a.size();i++)s+=a.get(i); return s/n;
     }
@@ -493,9 +594,9 @@ public class MainActivity extends Activity {
     private String pct(double x){return String.format(Locale.US,"%+.2f%%",x);}
 
     static class Quote {
-        String name,priceText; double price,change,rsi,sma,atr,support,resistance;
-        Quote(String n,String p,double pr,double ch,double r,double s){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;atr=0;support=0;resistance=0;}
-        Quote(String n,String p,double pr,double ch,double r,double s,double a,double sup,double res){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;atr=a;support=sup;resistance=res;}
+        String name,priceText; double price,change,rsi,sma,macd,volumeRatio,atr,support,resistance;
+        Quote(String n,String p,double pr,double ch,double r,double s){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=0;volumeRatio=1;atr=0;support=0;resistance=0;}
+        Quote(String n,String p,double pr,double ch,double r,double s,double m,double vr,double a,double sup,double res){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=m;volumeRatio=vr;atr=a;support=sup;resistance=res;}
     }
 
     static class Scan {
