@@ -416,9 +416,6 @@ public class MainActivity extends Activity {
         HashSet<String> allowed=new HashSet<>();
         for(int i=0;i<syms.length();i++){
             JSONObject s=syms.getJSONObject(i);
-            if("TRADING".equals(s.optString("status")) &&
-               "USDT".equals(s.optString("quoteAsset")) &&
-               "SPOT".equals(s.optString("isSpotTradingAllowed"))){ }
             if("TRADING".equals(s.optString("status")) && "USDT".equals(s.optString("quoteAsset")))
                 allowed.add(s.optString("symbol"));
         }
