@@ -18,11 +18,16 @@ import java.net.URLEncoder;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.Callable;
 
 public class MainActivity extends Activity {
     private LinearLayout list;
     private TextView status, marketBadge;
-    private final ExecutorService pool = Executors.newFixedThreadPool(4);
+    private final ExecutorService pool = Executors.newFixedThreadPool(8);
+    private static final int RETRIES = 2;
+    private static final int NETWORK_TIMEOUT_MS = 15000;
 
     private static final String[] BIST100 = ("ASELS,TUPRS,BIMAS,THYAO,AKBNK,EREGL,YKBNK,KCHOL,ISCTR,SAHOL,TCELL,ASTOR,GARAN,CCOLA,ENKAI,SISE,TAVHL,FROTO,MGROS,SASA,TRALT,EKGYO,AEFES,MPARK,TOASO,KRDMD,PGSUS,GUBRF,HALKB,ENERY,ENJSA,TURSG,PETKM,TTKOM,GLYHO,AGHOL,TRMET,MAVI,TKFEN,VAKBN,TRGYO,OYAKC,AHGAZ,BRSAN,AKSEN,TABGD,DOHOL,ANSGR,SOKM,RGYAS,AYGAZ,ALARK,CIMSA,RYSAS,ULKER,AKSA,ISMEN,DOAS,CVKMD,OTKAR,GLRMK,TSKB,ARCLK,HEKTS,TTRAK,ISDMR,TRENJ,ALBRK,ECILC,CANTE,CWENE,ANHYT,TCKRC,BTCIM,AKFYE,SNGYO,GRSEL,ODAS,BRYAT,EGEEN,ECZYT,BERA,FENER,KCAER,ALTNY,EGGUB,LMKDC,PAHOL,ENTRA,ZOREN,OBAMS,GWIND,KARSN,KORDS,EUREN,BINHO,VESTL,KATMR,AKCNS,ALFAS").split(",");
     private static final String[] COIN_FALLBACK = {"BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","AVAXUSDT"};
@@ -151,16 +156,12 @@ public class MainActivity extends Activity {
         setRoundedBackground(marketBadge, Color.rgb(40,90,155), 18);
         pool.execute(() -> {
             String[] syms = Arrays.copyOf(BIST100, stockMode);
+            ArrayList<ScanResult> results = parallelScan(syms, false, "BIST");
             ArrayList<Quote> data = new ArrayList<>();
-            int ok=0;
-            for (int i=0;i<syms.length;i++) {
-                try { data.add(fetchYahoo(syms[i]+".IS", syms[i])); ok++; }
-                catch (Exception ignored) {}
-                final int done=i+1, total=syms.length;
-                runOnUiThread(() -> status.setText("BIST "+stockMode+" taranıyor • "+done+"/"+total));
-            }
-            final int success=ok;
-            runOnUiThread(() -> showQuotes(data, "BIST "+stockMode, success, syms.length));
+            int success=0;
+            for(ScanResult r:results) if(r.quote!=null){ data.add(r.quote); success++; }
+            final int ok=success;
+            runOnUiThread(() -> showQuotes(data, "BIST "+stockMode, ok, syms.length));
         });
     }
 
@@ -172,19 +173,18 @@ public class MainActivity extends Activity {
         pool.execute(() -> {
             try {
                 String[] syms=discoverCoins(coinMode);
+                ArrayList<ScanResult> results = parallelScan(syms, true, "Kripto");
                 ArrayList<Quote> data=new ArrayList<>();
-                int ok=0;
-                for(int i=0;i<syms.length;i++){
-                    try{data.add(fetchBinance(syms[i]));ok++;}catch(Exception ignored){}
-                    final int done=i+1,total=syms.length;
-                    runOnUiThread(() -> status.setText("Kripto taranıyor • "+done+"/"+total));
-                }
-                final int success=ok;
-                runOnUiThread(() -> showQuotes(data, "KRİPTO", success, syms.length));
+                int success=0;
+                for(ScanResult r:results) if(r.quote!=null){ data.add(r.quote); success++; }
+                final int ok=success;
+                runOnUiThread(() -> showQuotes(data, "KRİPTO", ok, syms.length));
             } catch(Exception e) {
+                String[] fallback=COIN_FALLBACK;
+                ArrayList<ScanResult> results=parallelScan(fallback,true,"Kripto");
                 ArrayList<Quote> data=new ArrayList<>();
-                for(String s:COIN_FALLBACK) try{data.add(fetchBinance(s));}catch(Exception ignored){}
-                runOnUiThread(() -> showQuotes(data, "KRİPTO", data.size(), COIN_FALLBACK.length));
+                for(ScanResult r:results) if(r.quote!=null) data.add(r.quote);
+                runOnUiThread(() -> showQuotes(data, "KRİPTO", data.size(), fallback.length));
             }
         });
     }
@@ -195,28 +195,65 @@ public class MainActivity extends Activity {
         marketBadge.setText("●  AKILLI GENİŞ TARAMA");
         setRoundedBackground(marketBadge, Color.rgb(205,130,35), 18);
         pool.execute(() -> {
-            ArrayList<Scan> scans = new ArrayList<>();
-            int total=stockMode+1;
-            int done=0;
-            String[] syms=Arrays.copyOf(BIST100, stockMode);
-            for(String s:syms){
-                try{Quote q=fetchYahoo(s+".IS",s);scans.add(new Scan(q,score(q)));}catch(Exception ignored){}
-                final int d=++done;
-                runOnUiThread(() -> status.setText("Hisseler: "+d+"/"+stockMode+" • "+universeLabel));
+            String[] stocks=Arrays.copyOf(BIST100, stockMode);
+            ArrayList<ScanResult> stockResults=parallelScan(stocks,false,"Hisseler");
+
+            String[] coins;
+            try { coins=discoverCoins(coinMode); }
+            catch(Exception e) { coins=COIN_FALLBACK; }
+            ArrayList<ScanResult> coinResults=parallelScan(coins,true,"Kripto");
+
+            ArrayList<Scan> scans=new ArrayList<>();
+            int attempted=stocks.length+coins.length;
+            int failed=0;
+            for(ScanResult r:stockResults) {
+                if(r.quote!=null) scans.add(new Scan(r.quote,score(r.quote))); else failed++;
             }
-            try{
-                String[] cs=discoverCoins(coinMode);
-                total+=cs.length;
-                for(String s:cs){
-                    try{Quote q=fetchBinance(s);scans.add(new Scan(q,score(q)));}catch(Exception ignored){}
-                    final int d=++done;
-                    runOnUiThread(() -> status.setText("Tarama: "+d+" • "+universeLabel));
-                }
-            }catch(Exception ignored){}
+            for(ScanResult r:coinResults) {
+                if(r.quote!=null) scans.add(new Scan(r.quote,score(r.quote))); else failed++;
+            }
             scans.sort((a,b)->Double.compare(b.score,a.score));
-            final int attempted=done;
-            runOnUiThread(() -> showScans(scans, attempted));
+            final int success=scans.size(), fail=failed, total=attempted;
+            runOnUiThread(() -> showScans(scans, success, fail, total));
         });
+    }
+
+    private ArrayList<ScanResult> parallelScan(String[] symbols, boolean coin, String label) {
+        ArrayList<ScanResult> results=new ArrayList<>();
+        CompletionService<ScanResult> cs=new ExecutorCompletionService<>(pool);
+        for(String symbol:symbols) {
+            cs.submit(() -> scanOne(symbol, coin));
+        }
+        for(int i=0;i<symbols.length;i++) {
+            try {
+                ScanResult r=cs.take().get();
+                results.add(r);
+            } catch(Exception e) {
+                results.add(new ScanResult(null, ""));
+            }
+            final int done=i+1, total=symbols.length;
+            runOnUiThread(() -> status.setText(label+" taranıyor • "+done+"/"+total+" • "+universeLabel));
+        }
+        return results;
+    }
+
+    private ScanResult scanOne(String symbol, boolean coin) {
+        Exception last=null;
+        for(int attempt=1;attempt<=RETRIES;attempt++) {
+            try {
+                Quote q=coin ? fetchBinance(symbol) : fetchYahoo(symbol+".IS",symbol);
+                return new ScanResult(q,symbol);
+            } catch(Exception e) {
+                last=e;
+                if(attempt<RETRIES) {
+                    try { Thread.sleep(350L*attempt); } catch(InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }
+        return new ScanResult(null,symbol);
     }
 
     private void showQuotes(ArrayList<Quote> data, String type, int success, int attempted) {
@@ -229,7 +266,7 @@ public class MainActivity extends Activity {
         setRoundedBackground(marketBadge, Color.rgb(40,125,85), 18);
     }
 
-    private void showScans(ArrayList<Scan> scans, int attempted) {
+    private void showScans(ArrayList<Scan> scans, int success, int failed, int attempted) {
         list.removeAllViews();
 
         TextView heading = new TextView(this);
@@ -246,7 +283,7 @@ public class MainActivity extends Activity {
             list.addView(scanCard(s, n));
         }
 
-        status.setText("Tarama tamamlandı • " + scans.size() + "/" + attempted + " başarılı • " + universeLabel);
+        status.setText("Tarama tamamlandı • " + success + "/" + attempted + " başarılı • " + failed + " başarısız • " + universeLabel);
         marketBadge.setText("●  TARAMA TAMAMLANDI");
         setRoundedBackground(marketBadge, Color.rgb(40,125,85), 18);
     }
@@ -502,7 +539,7 @@ public class MainActivity extends Activity {
 
     private JSONObject getJson(String url) throws Exception {
         HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
-        c.setConnectTimeout(10000); c.setReadTimeout(15000);
+        c.setConnectTimeout(NETWORK_TIMEOUT_MS); c.setReadTimeout(NETWORK_TIMEOUT_MS);
         c.setRequestProperty("User-Agent","Mozilla/5.0 HisseCoinTarayici/3.0");
         int code=c.getResponseCode();
         if(code<200 || code>=300) throw new Exception("HTTP "+code);
@@ -599,5 +636,10 @@ public class MainActivity extends Activity {
     static class Scan {
         Quote q; double score;
         Scan(Quote q,double s){this.q=q;score=s;}
+    }
+
+    static class ScanResult {
+        Quote quote; String symbol;
+        ScanResult(Quote q,String s){quote=q;symbol=s;}
     }
 }
