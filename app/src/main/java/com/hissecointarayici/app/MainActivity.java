@@ -510,31 +510,44 @@ public class MainActivity extends Activity {
         else if(q.price<breakout) condition="Fiyat alım bölgesinin üzerinde; geri çekilme beklemek daha kontrollü.";
         else condition="Direnç aşılmış; kırılımın kalıcılığı ayrıca izlenmeli.";
 
-        return "ALIM–SATIM PLANLAYICI\\n\\n"+
-                "Alım bölgesi: "+num(entryLow)+" – "+num(entryHigh)+"\\n"+
-                "Kırılım seviyesi: "+num(breakout)+"\\n"+
-                "Hedef 1: "+num(target1)+"\\n"+
-                "Hedef 2: "+num(target2)+"\\n"+
-                "Hedef 3: "+num(target3)+"\\n"+
-                "Zarar-kes: "+num(stop)+"\\n"+
-                "Risk/Getiri (H1): "+String.format(Locale.US,"%.2f",rr)+"R\\n\\n"+
-                "Destek: "+num(support)+"\\n"+
-                "Direnç: "+num(resistance)+"\\n"+
-                "ATR14: "+num(atr)+"\\n\\n"+
-                "Durum: "+condition+"\\n\\n"+
-                "Hesaplama; destek/direnç, ATR14 ve mevcut fiyat kullanılarak dinamik yapılır.\\n"+
+        return "ALIM–SATIM PLANLAYICI\n\n"+
+                "Alım bölgesi: "+num(entryLow)+" – "+num(entryHigh)+"\n"+
+                "Kırılım seviyesi: "+num(breakout)+"\n"+
+                "Hedef 1: "+num(target1)+"\n"+
+                "Hedef 2: "+num(target2)+"\n"+
+                "Hedef 3: "+num(target3)+"\n"+
+                "Zarar-kes: "+num(stop)+"\n"+
+                "Risk/Getiri (H1): "+String.format(Locale.US,"%.2f",rr)+"R\n\n"+
+                "Destek: "+num(support)+"\n"+
+                "Direnç: "+num(resistance)+"\n"+
+                "ATR14: "+num(atr)+"\n\n"+
+                "Durum: "+condition+"\n\n"+
+                "Hesaplama; destek/direnç, ATR14 ve mevcut fiyat kullanılarak dinamik yapılır.\n"+
                 "Bu bölüm teknik senaryodur, yatırım tavsiyesi değildir.";
     }
 
     private double score(Quote q) {
+        // Dengeli puanlama: tek bir gösterge skoru tavana taşımasın.
         double s=50;
-        if(q.change>3) s+=12; else if(q.change>0) s+=6; else if(q.change<-3) s-=12; else if(q.change<0) s-=6;
-        if(q.rsi>=50 && q.rsi<=68) s+=12; else if(q.rsi>72) s-=10; else if(q.rsi<30) s+=6;
-        if(q.sma>0 && q.price>q.sma) s+=12; else if(q.sma>0) s-=10;
-        if(q.macd>0) s+=10; else if(q.macd<0) s-=6;
-        if(q.volumeRatio>=1.5) s+=8; else if(q.volumeRatio>=1.0) s+=4; else if(q.volumeRatio<0.6) s-=4;
-        if(q.resistance>0 && q.price>q.resistance) s+=8;
-        return Math.max(0,Math.min(100,s));
+        if(q.change>8) s+=12; else if(q.change>3) s+=9; else if(q.change>0) s+=5;
+        else if(q.change<-8) s-=12; else if(q.change<-3) s-=9; else if(q.change<0) s-=5;
+        if(q.rsi>=52 && q.rsi<=65) s+=8;
+        else if(q.rsi>72) s-=10;
+        else if(q.rsi>=68) s-=4;
+        else if(q.rsi<30) s+=3;
+        else if(q.rsi<42) s-=3;
+        if(q.sma>0 && q.price>q.sma) s+=8;
+        else if(q.sma>0) s-=8;
+        double macdPct=q.price>0 ? (q.macd/q.price)*100.0 : 0;
+        if(macdPct>0.25) s+=6;
+        else if(macdPct>0.05) s+=3;
+        else if(macdPct< -0.25) s-=6;
+        else if(macdPct< -0.05) s-=3;
+        if(q.volumeRatio>=2.0) s+=6;
+        else if(q.volumeRatio>=1.3) s+=4;
+        else if(q.volumeRatio<0.5) s-=5;
+        if(q.resistance>0 && q.price>q.resistance) s+=4;
+        return Math.max(10,Math.min(95,s));
     }
 
     private JSONObject getJson(String url) throws Exception {
@@ -580,16 +593,20 @@ public class MainActivity extends Activity {
     }
 
     private double recentLow(ArrayList<Double> a,int n){
-        if(a.isEmpty()) return 0;
-        int start=Math.max(0,a.size()-n); double v=Double.MAX_VALUE;
-        for(int i=start;i<a.size();i++) if(a.get(i)>0 && a.get(i)<v) v=a.get(i);
+        if(a.size()<2) return a.isEmpty()?0:a.get(0);
+        int end=a.size()-1;
+        int start=Math.max(0,end-n);
+        double v=Double.MAX_VALUE;
+        for(int i=start;i<end;i++) if(a.get(i)>0 && a.get(i)<v) v=a.get(i);
         return v==Double.MAX_VALUE?0:v;
     }
 
     private double recentHigh(ArrayList<Double> a,int n){
-        if(a.isEmpty()) return 0;
-        int start=Math.max(0,a.size()-n); double v=0;
-        for(int i=start;i<a.size();i++) if(a.get(i)>v) v=a.get(i);
+        if(a.size()<2) return a.isEmpty()?0:a.get(0);
+        int end=a.size()-1;
+        int start=Math.max(0,end-n);
+        double v=0;
+        for(int i=start;i<end;i++) if(a.get(i)>v) v=a.get(i);
         return v;
     }
 
