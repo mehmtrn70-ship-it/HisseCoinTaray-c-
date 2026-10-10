@@ -386,6 +386,9 @@ public class MainActivity extends Activity {
                 "\n\n" + planText(s.q) +
                 "\n\nNot: Bu analiz teknik göstergelere dayanır ve yatırım tavsiyesi değildir.";
 
+        // Koruma: eski/bozuk metinlerden gelen literal \\n ifadelerini gerçek satır sonuna çevir.
+        msg = msg.replace("\\n", "\n");
+
         new android.app.AlertDialog.Builder(this)
                 .setTitle("📊 " + s.q.name + " Analizi")
                 .setMessage(msg)
