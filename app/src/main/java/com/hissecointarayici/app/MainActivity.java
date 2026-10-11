@@ -140,7 +140,7 @@ public class MainActivity extends Activity {
                     if(which==0){stockMode=30;coinMode=10;universeLabel="BIST 30 + Coin İlk 10";}
                     else if(which==1){stockMode=50;coinMode=50;universeLabel="BIST 50 + Coin İlk 50";}
                     else if(which==2){stockMode=100;coinMode=100;universeLabel="BIST 100 + Coin İlk 100";}
-                    else {stockMode=100;coinMode=0;universeLabel="BIST 100 + Coin Tümü";}
+                    else {stockMode=150;coinMode=0;universeLabel="BIST 150 + Coin Tümü";}
                     status.setText("Seçildi: "+universeLabel);
                     marketBadge.setText("●  EVREN HAZIR");
                     setRoundedBackground(marketBadge, Color.rgb(40,125,85), 18);
