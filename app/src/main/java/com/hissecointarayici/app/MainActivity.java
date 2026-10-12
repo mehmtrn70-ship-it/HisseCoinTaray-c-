@@ -703,9 +703,6 @@ public class MainActivity extends Activity {
         if (lines.isEmpty()) summary += "\nHenüz sanal işlem yok. Bir sinyalin detayına girip SANAL ALIM seç.";
         new android.app.AlertDialog.Builder(this).setTitle("Sanal Portföy")
                 .setMessage(summary + "\n\n" + lines.toString())
-                .setItems(lines.toArray(new String[0]), (dialog, which) -> {
-                    if (which < openIndexes.size()) confirmClosePaperPosition(openIndexes.get(which));
-                })
                 .setPositiveButton("YENİLE", (dialog, which) -> showPaperPortfolio())
                 .setNegativeButton("KAPAT", null).show();
     }
