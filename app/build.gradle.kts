@@ -10,7 +10,7 @@ android {
         applicationId = "com.hissecointarayici.app"
         minSdk = 23
         targetSdk = 36
-        versionCode = 2
-        versionName = "2.0"
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 3)
+        versionName = "3.0"
     }
 }
