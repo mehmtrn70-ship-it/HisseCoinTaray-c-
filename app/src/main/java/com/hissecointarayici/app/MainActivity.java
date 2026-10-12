@@ -702,7 +702,7 @@ public class MainActivity extends Activity {
                 "\nNot: TL ve USDT ayrı hesaplanır; farklı para birimleri toplanmaz.";
         if (lines.isEmpty()) summary += "\nHenüz sanal işlem yok. Bir sinyalin detayına girip SANAL ALIM seç.";
         new android.app.AlertDialog.Builder(this).setTitle("Sanal Portföy")
-                .setMessage(summary)
+                .setMessage(summary + "\n\n" + lines.toString())
                 .setItems(lines.toArray(new String[0]), (dialog, which) -> {
                     if (which < openIndexes.size()) confirmClosePaperPosition(openIndexes.get(which));
                 })
