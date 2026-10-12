@@ -462,7 +462,7 @@ public class MainActivity extends Activity {
         card.addView(a);
 
         TextView b = new TextView(this);
-        b.setText("Fiyat: " + q.priceText + "    RSI: " +
+        b.setText("Fiyat: " + q.priceText + " " + currencyFor(q.coin) + "    RSI: " +
                 String.format(Locale.US,"%.1f",q.rsi) + "    SMA20: " +
                 (q.sma > 0 ? String.format(Locale.US,"%.2f",q.sma) : "-"));
         b.setTextSize(14);
@@ -488,10 +488,10 @@ public class MainActivity extends Activity {
         String msg = s.q.name + "\n\n" +
                 "Skor: " + String.format(Locale.US,"%.0f/100",s.score) + "\n" +
                 "Sinyal: " + signal(s.score) + "\n\n" +
-                "Fiyat: " + s.q.priceText + "\n" +
+                "Fiyat: " + s.q.priceText + " " + currencyFor(s.q.coin) + "\n" +
                 "24 saat: " + pct(s.q.change) + "\n" +
                 "RSI: " + String.format(Locale.US,"%.1f",s.q.rsi) + " — " + rsiText + "\n" +
-                "SMA20: " + (s.q.sma > 0 ? String.format(Locale.US,"%.4f",s.q.sma) : "-") + "\n" +
+                "SMA20: " + (s.q.sma > 0 ? formatPortfolioPrice(s.q.sma, s.q.coin) + " " + currencyFor(s.q.coin) : "-") + "\n" +
                 "Trend: " + trend + "\n" +
                 "Momentum: " + momentum + "\n" +
                 "MACD: " + String.format(Locale.US,"%.4f",s.q.macd) + "\n" +
@@ -645,7 +645,11 @@ public class MainActivity extends Activity {
     }
 
     private String formatPortfolioPrice(double value, boolean coin) {
-        return String.format(Locale.US, coin ? "%.8f" : "%.2f", value);
+        if (!coin) return String.format(Locale.US, "%.2f", value);
+        if (Math.abs(value) < 0.0001) return String.format(Locale.US, "%.8f", value);
+        if (Math.abs(value) < 0.01) return String.format(Locale.US, "%.6f", value);
+        if (Math.abs(value) < 1) return String.format(Locale.US, "%.4f", value);
+        return String.format(Locale.US, "%.3f", value);
     }
 
     private void refreshPaperPricesThenShow() {
@@ -702,53 +706,120 @@ public class MainActivity extends Activity {
         try { closed = new JSONArray(paperPrefs().getString("paper_closed", "[]")); }
         catch (Exception e) { closed = new JSONArray(); }
 
-        ArrayList<String> lines = new ArrayList<>();
-        ArrayList<Integer> openIndexes = new ArrayList<>();
-        double unrealizedTL = 0;
-        double unrealizedUSDT = 0;
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(14, 8, 14, 8);
+        scroll.addView(content);
+
+        double unrealizedTL = 0, unrealizedUSDT = 0;
+        int openCount = 0;
         for (int i = 0; i < positions.length(); i++) {
             JSONObject p = positions.optJSONObject(i);
             if (p == null) continue;
+            final int positionIndex = i;
             double entry = p.optDouble("entry", 0);
             double current = p.optDouble("current", entry);
             double qty = p.optDouble("quantity", 0);
             boolean coin = p.optBoolean("coin", false);
             String currency = p.optString("currency", currencyFor(coin));
-            double cost = entry * qty;
-            double value = current * qty;
-            double pnl = value - cost;
+            double cost = entry * qty, value = current * qty, pnl = value - cost;
             double pct = cost > 0 ? pnl * 100.0 / cost : 0;
-            if ("USDT".equals(currency)) unrealizedUSDT += pnl;
-            else unrealizedTL += pnl;
+            if ("USDT".equals(currency)) unrealizedUSDT += pnl; else unrealizedTL += pnl;
+            openCount++;
 
-            lines.add("AÇIK • " + p.optString("name") + " • " +
-                    String.format(Locale.US, "%.6g", qty) + " adet\n" +
-                    "Alış: " + formatPortfolioPrice(entry, coin) + " " + currency +
-                    " • Maliyet: " + formatPortfolioPrice(cost, coin) + " " + currency + "\n" +
-                    "Son: " + formatPortfolioPrice(current, coin) + " " + currency +
-                    " • Değer: " + formatPortfolioPrice(value, coin) + " " + currency + "\n" +
-                    "K/Z: " + String.format(Locale.US, "%+.2f", pnl) + " " + currency +
-                    " (" + String.format(Locale.US, "%+.2f%%", pct) + ") • kapatmak için dokun");
-            openIndexes.add(i);
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(14, 12, 14, 12);
+            setRoundedBackground(card, Color.rgb(248, 250, 252), 14);
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
+            cp.setMargins(0, 5, 0, 7);
+            card.setLayoutParams(cp);
+
+            TextView heading = new TextView(this);
+            heading.setText("● " + p.optString("name") + "  •  AÇIK İŞLEM");
+            heading.setTextSize(16);
+            heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            heading.setTextColor(Color.rgb(35, 45, 60));
+            card.addView(heading);
+
+            TextView detail = new TextView(this);
+            detail.setText("Miktar: " + String.format(Locale.US, "%.8g", qty) + "\n" +
+                    "Alış fiyatı: " + formatPortfolioPrice(entry, coin) + " " + currency + "\n" +
+                    "Güncel fiyat: " + formatPortfolioPrice(current, coin) + " " + currency + "\n" +
+                    "Toplam maliyet: " + formatPortfolioPrice(cost, coin) + " " + currency + "\n" +
+                    "Güncel değer: " + formatPortfolioPrice(value, coin) + " " + currency);
+            detail.setTextSize(13);
+            detail.setTextColor(Color.rgb(75, 82, 95));
+            detail.setPadding(0, 7, 0, 7);
+            card.addView(detail);
+
+            TextView profit = new TextView(this);
+            profit.setText("Kâr / Zarar: " + String.format(Locale.US, "%+.4f", pnl) + " " + currency +
+                    "  (" + String.format(Locale.US, "%+.2f%%", pct) + ")");
+            profit.setTextSize(15);
+            profit.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            profit.setTextColor(pnl >= 0 ? Color.rgb(30, 125, 75) : Color.rgb(190, 55, 55));
+            card.addView(profit);
+
+            TextView hint = new TextView(this);
+            hint.setText("İşlemi kapatmak için bu karta dokun");
+            hint.setTextSize(11);
+            hint.setTextColor(Color.rgb(95, 105, 120));
+            hint.setPadding(0, 5, 0, 0);
+            card.addView(hint);
+            card.setOnClickListener(v -> confirmClosePaperPosition(positionIndex));
+            content.addView(card);
         }
-        int openCount = lines.size();
-        for (int i = closed.length() - 1; i >= 0 && lines.size() < openCount + 10; i--) {
-            JSONObject p = closed.optJSONObject(i);
-            if (p == null) continue;
-            boolean coin = p.optBoolean("coin", false);
-            String currency = p.optString("currency", currencyFor(coin));
-            lines.add("KAPALI • " + p.optString("name") + " • sonuç " +
-                    String.format(Locale.US, "%+.2f", p.optDouble("pnl", 0)) + " " + currency +
-                    " • " + new java.text.SimpleDateFormat("dd.MM HH:mm", Locale.getDefault())
-                    .format(new Date(p.optLong("closed", 0))));
+
+        TextView summary = new TextView(this);
+        summary.setText("PORTFÖY ÖZETİ\n" +
+                "Açık işlem: " + openCount + "\n" +
+                "Açık K/Z (TL): " + String.format(Locale.US, "%+.2f TL", unrealizedTL) + "\n" +
+                "Açık K/Z (USDT): " + String.format(Locale.US, "%+.4f USDT", unrealizedUSDT) + "\n" +
+                "TL ve USDT bakiyeleri ayrı hesaplanır; birbirine eklenmez.");
+        summary.setTextSize(14);
+        summary.setTextColor(Color.rgb(35, 45, 60));
+        summary.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        summary.setPadding(4, 8, 4, 12);
+        content.addView(summary, 0);
+
+        if (openCount == 0) {
+            TextView empty = new TextView(this);
+            empty.setText("Henüz açık sanal işlem yok. Bir sinyalin detayına girip SANAL ALIM seçebilirsin.");
+            empty.setTextSize(14);
+            empty.setTextColor(Color.rgb(85, 90, 100));
+            empty.setPadding(4, 8, 4, 14);
+            content.addView(empty);
         }
-        String summary = "Açık işlem: " + openCount +
-                "\nAçık K/Z — TL: " + String.format(Locale.US, "%+.2f TL", unrealizedTL) +
-                "\nAçık K/Z — USDT: " + String.format(Locale.US, "%+.2f USDT", unrealizedUSDT) +
-                "\nNot: TL ve USDT ayrı hesaplanır; farklı para birimleri toplanmaz.";
-        if (lines.isEmpty()) summary += "\nHenüz sanal işlem yok. Bir sinyalin detayına girip SANAL ALIM seç.";
+
+        if (closed.length() > 0) {
+            TextView closedHeading = new TextView(this);
+            closedHeading.setText("SON KAPATILAN İŞLEMLER");
+            closedHeading.setTextSize(14);
+            closedHeading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            closedHeading.setTextColor(Color.rgb(65, 75, 90));
+            closedHeading.setPadding(4, 12, 4, 5);
+            content.addView(closedHeading);
+            for (int i = closed.length() - 1, shown = 0; i >= 0 && shown < 10; i--, shown++) {
+                JSONObject p = closed.optJSONObject(i);
+                if (p == null) continue;
+                boolean coin = p.optBoolean("coin", false);
+                String currency = p.optString("currency", currencyFor(coin));
+                TextView closedLine = new TextView(this);
+                closedLine.setText(p.optString("name") + " • Sonuç: " +
+                        String.format(Locale.US, "%+.4f", p.optDouble("pnl", 0)) + " " + currency +
+                        " • " + new java.text.SimpleDateFormat("dd.MM HH:mm", Locale.getDefault())
+                        .format(new Date(p.optLong("closed", 0))));
+                closedLine.setTextSize(12);
+                closedLine.setTextColor(Color.rgb(85, 90, 100));
+                closedLine.setPadding(4, 5, 4, 5);
+                content.addView(closedLine);
+            }
+        }
+
         new android.app.AlertDialog.Builder(this).setTitle("Sanal Portföy")
-                .setMessage(summary + "\n\n" + lines.toString())
+                .setView(scroll)
                 .setPositiveButton("FİYATLARI YENİLE", (dialog, which) -> refreshPaperPricesThenShow())
                 .setNeutralButton("İŞLEM KAPAT", (dialog, which) -> choosePaperPositionToClose())
                 .setNegativeButton("KAPAT", null).show();
@@ -892,7 +963,10 @@ public class MainActivity extends Activity {
         return new Quote(symbol.replace("USDT",""),format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res,true);
     }
 
-    private String num(double x){ return x>0 ? String.format(Locale.US,"%.4f",x) : "-"; }
+    private String num(double x, boolean coin) {
+        if (x <= 0) return "-";
+        return formatPortfolioPrice(x, coin);
+    }
 
     private String planText(Quote q) {
         if(q.price<=0) return "Planlama için yeterli fiyat verisi yok.";
@@ -921,16 +995,16 @@ public class MainActivity extends Activity {
         else condition="Direnç aşılmış; kırılımın kalıcılığı ayrıca izlenmeli.";
 
         return "ALIM–SATIM PLANLAYICI\n\n"+
-                "Alım bölgesi: "+num(entryLow)+" – "+num(entryHigh)+"\n"+
-                "Kırılım seviyesi: "+num(breakout)+"\n"+
-                "Hedef 1: "+num(target1)+"\n"+
-                "Hedef 2: "+num(target2)+"\n"+
-                "Hedef 3: "+num(target3)+"\n"+
-                "Zarar-kes: "+num(stop)+"\n"+
+                "Alım bölgesi: "+num(entryLow, q.coin)+" – "+num(entryHigh, q.coin)+"\n"+
+                "Kırılım seviyesi: "+num(breakout, q.coin)+"\n"+
+                "Hedef 1: "+num(target1, q.coin)+"\n"+
+                "Hedef 2: "+num(target2, q.coin)+"\n"+
+                "Hedef 3: "+num(target3, q.coin)+"\n"+
+                "Zarar-kes: "+num(stop, q.coin)+"\n"+
                 "Risk/Getiri (H1): "+String.format(Locale.US,"%.2f",rr)+"R\n\n"+
-                "Destek: "+num(support)+"\n"+
-                "Direnç: "+num(resistance)+"\n"+
-                "ATR14: "+num(atr)+"\n\n"+
+                "Destek: "+num(support, q.coin)+"\n"+
+                "Direnç: "+num(resistance, q.coin)+"\n"+
+                "ATR14: "+num(atr, q.coin)+"\n\n"+
                 "Durum: "+condition+"\n\n"+
                 "Hesaplama; destek/direnç, ATR14 ve mevcut fiyat kullanılarak dinamik yapılır.\n"+
                 "Bu bölüm teknik senaryodur, yatırım tavsiyesi değildir.";
