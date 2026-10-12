@@ -2,6 +2,7 @@ package com.hissecointarayici.app;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Handler;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -26,6 +27,17 @@ public class MainActivity extends Activity {
     private LinearLayout list;
     private TextView status, marketBadge;
     private final ExecutorService pool = Executors.newFixedThreadPool(8);
+    private final ExecutorService refreshPool = Executors.newFixedThreadPool(2);
+    private final Handler mainHandler = new Handler();
+    private final ArrayList<Scan> latestScans = new ArrayList<>();
+    private volatile boolean refreshingTopSignals = false;
+    private static final long AUTO_REFRESH_MS = 60000L;
+    private final Runnable autoRefreshRunnable = new Runnable() {
+        @Override public void run() {
+            if (!latestScans.isEmpty()) refreshTopSignals();
+            mainHandler.postDelayed(this, AUTO_REFRESH_MS);
+        }
+    };
     private static final int RETRIES = 2;
     private static final int NETWORK_TIMEOUT_MS = 15000;
 
@@ -164,6 +176,8 @@ public class MainActivity extends Activity {
     }
 
     private void loadStocks() {
+        mainHandler.removeCallbacks(autoRefreshRunnable);
+        latestScans.clear();
         list.removeAllViews();
         status.setText("BIST "+stockMode+" hisseleri taranıyor...");
         marketBadge.setText("●  BIST "+stockMode+" TARAMASI");
@@ -180,6 +194,8 @@ public class MainActivity extends Activity {
     }
 
     private void loadCoins() {
+        mainHandler.removeCallbacks(autoRefreshRunnable);
+        latestScans.clear();
         list.removeAllViews();
         status.setText("Binance evreni hazırlanıyor...");
         marketBadge.setText("●  KRİPTO EVRENİ");
@@ -204,6 +220,8 @@ public class MainActivity extends Activity {
     }
 
     private void loadScanner() {
+        mainHandler.removeCallbacks(autoRefreshRunnable);
+        latestScans.clear();
         list.removeAllViews();
         status.setText("Tüm seçili piyasa evreni taranıyor...");
         marketBadge.setText("●  AKILLI GENİŞ TARAMA");
@@ -281,6 +299,8 @@ public class MainActivity extends Activity {
     }
 
     private void showScans(ArrayList<Scan> scans, int success, int failed, int attempted) {
+        latestScans.clear();
+        latestScans.addAll(scans);
         list.removeAllViews();
 
         TextView heading = new TextView(this);
@@ -298,8 +318,74 @@ public class MainActivity extends Activity {
         }
 
         status.setText("Tarama tamamlandı • " + success + "/" + attempted + " başarılı • " + failed + " başarısız • " + universeLabel);
-        marketBadge.setText("●  TARAMA TAMAMLANDI");
+        marketBadge.setText("●  OTOMATİK YENİLEME AÇIK");
         setRoundedBackground(marketBadge, Color.rgb(40,125,85), 18);
+        mainHandler.removeCallbacks(autoRefreshRunnable);
+        mainHandler.postDelayed(autoRefreshRunnable, AUTO_REFRESH_MS);
+    }
+
+    private void refreshTopSignals() {
+        if (refreshingTopSignals || latestScans.isEmpty()) return;
+        refreshingTopSignals = true;
+        final ArrayList<Scan> snapshot = new ArrayList<>();
+        for (int i=0; i<latestScans.size() && i<18; i++) snapshot.add(latestScans.get(i));
+        refreshPool.execute(() -> {
+            try {
+                CompletionService<ScanResult> cs = new ExecutorCompletionService<>(pool);
+                for (Scan old : snapshot) {
+                    final boolean coin = old.q.coin;
+                    final String symbol = old.q.name + (coin ? "USDT" : "");
+                    cs.submit(() -> {
+                        ScanResult raw = scanOne(symbol, coin);
+                        return new ScanResult(raw.quote, symbol);
+                    });
+                }
+                HashMap<String, Scan> updated = new HashMap<>();
+                for (int i=0; i<snapshot.size(); i++) {
+                    try {
+                        ScanResult r = cs.take().get();
+                        if (r.quote != null) updated.put(r.symbol, new Scan(r.quote, score(r.quote)));
+                    } catch (Exception ignored) { }
+                }
+                runOnUiThread(() -> {
+                    if (!updated.isEmpty()) {
+                        ArrayList<Scan> merged = new ArrayList<>(latestScans);
+                        for (int i=0; i<merged.size() && i<18; i++) {
+                            Scan old = merged.get(i);
+                            String key = old.q.name + (old.q.coin ? "USDT" : "");
+                            Scan fresh = updated.get(key);
+                            if (fresh != null) merged.set(i, fresh);
+                        }
+                        merged.sort((a,b)->Double.compare(b.score,a.score));
+                        showScans(merged, merged.size(), 0, merged.size());
+                        String time = new java.text.SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                        status.setText("İlk 18 güçlü sinyal yenilendi • " + time + " • " + updated.size() + "/" + snapshot.size() + " başarılı • " + universeLabel);
+                        marketBadge.setText("●  FİYATLAR OTOMATİK GÜNCELLENDİ");
+                        setRoundedBackground(marketBadge, Color.rgb(40,125,85), 18);
+                    } else {
+                        String time = new java.text.SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                        status.setText("Otomatik yenileme başarısız • " + time + " • Bağlantıyı kontrol edin");
+                        marketBadge.setText("●  VERİ YENİLENEMEDİ");
+                        setRoundedBackground(marketBadge, Color.rgb(180,90,45), 18);
+                    }
+                    refreshingTopSignals = false;
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    refreshingTopSignals = false;
+                    status.setText("Otomatik yenileme başarısız • İnternet bağlantısını kontrol edin");
+                    marketBadge.setText("●  VERİ YENİLENEMEDİ");
+                    setRoundedBackground(marketBadge, Color.rgb(180,90,45), 18);
+                });
+            }
+        });
+    }
+
+    @Override protected void onDestroy() {
+        mainHandler.removeCallbacks(autoRefreshRunnable);
+        refreshPool.shutdownNow();
+        pool.shutdownNow();
+        super.onDestroy();
     }
 
     private View scanCard(Scan s, int rank) {
@@ -461,7 +547,7 @@ public class MainActivity extends Activity {
         ArrayList<Double> lows=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("low"));
         ArrayList<Double> vols=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("volume"));
         double a=atr(highs,lows,c,14), sup=recentLow(lows,20), res=recentHigh(highs,20);
-        return new Quote(name,format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res);
+        return new Quote(name,format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res,false);
     }
 
     private String[] discoverCoins(int limit) throws Exception {
@@ -496,7 +582,7 @@ public class MainActivity extends Activity {
         ArrayList<Double> c=new ArrayList<>(), highs=new ArrayList<>(), lows=new ArrayList<>(), vols=new ArrayList<>();
         for(int i=0;i<k.length();i++){ JSONArray row=k.getJSONArray(i); highs.add(row.getDouble(2)); lows.add(row.getDouble(3)); c.add(row.getDouble(4)); vols.add(row.getDouble(5)); }
         double a=atr(highs,lows,c,14), sup=recentLow(lows,20), res=recentHigh(highs,20);
-        return new Quote(symbol.replace("USDT",""),format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res);
+        return new Quote(symbol.replace("USDT",""),format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res,true);
     }
 
     private String num(double x){ return x>0 ? String.format(Locale.US,"%.4f",x) : "-"; }
@@ -662,9 +748,9 @@ public class MainActivity extends Activity {
     private String pct(double x){return String.format(Locale.US,"%+.2f%%",x);}
 
     static class Quote {
-        String name,priceText; double price,change,rsi,sma,macd,volumeRatio,atr,support,resistance;
-        Quote(String n,String p,double pr,double ch,double r,double s){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=0;volumeRatio=1;atr=0;support=0;resistance=0;}
-        Quote(String n,String p,double pr,double ch,double r,double s,double m,double vr,double a,double sup,double res){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=m;volumeRatio=vr;atr=a;support=sup;resistance=res;}
+        String name,priceText; boolean coin; double price,change,rsi,sma,macd,volumeRatio,atr,support,resistance;
+        Quote(String n,String p,double pr,double ch,double r,double s){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=0;volumeRatio=1;atr=0;support=0;resistance=0;coin=false;}
+        Quote(String n,String p,double pr,double ch,double r,double s,double m,double vr,double a,double sup,double res,boolean isCoin){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=m;volumeRatio=vr;atr=a;support=sup;resistance=res;coin=isCoin;}
     }
 
     static class Scan {
