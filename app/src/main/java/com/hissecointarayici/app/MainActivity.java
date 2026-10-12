@@ -118,6 +118,18 @@ public class MainActivity extends Activity {
         buttons.addView(universeBtn);
         root.addView(buttons);
 
+        LinearLayout toolsRow = new LinearLayout(this);
+        toolsRow.setGravity(Gravity.CENTER);
+        toolsRow.setPadding(0, 0, 0, 8);
+        Button historyBtn = makeButton("SİNYAL GEÇMİŞİ");
+        Button portfolioBtn = makeButton("SANAL PORTFÖY");
+        toolsRow.addView(historyBtn, new LinearLayout.LayoutParams(0, -2, 1));
+        toolsRow.addView(portfolioBtn, new LinearLayout.LayoutParams(0, -2, 1));
+        root.addView(toolsRow);
+
+        historyBtn.setOnClickListener(v -> showSignalHistory());
+        portfolioBtn.setOnClickListener(v -> showPaperPortfolio());
+
         status = new TextView(this);
         status.setText("Varsayılan tarama: BIST 150 + Coin Tümü");
         status.setTextSize(14);
@@ -245,6 +257,7 @@ public class MainActivity extends Activity {
                 if(r.quote!=null) scans.add(new Scan(r.quote,score(r.quote))); else failed++;
             }
             scans.sort((a,b)->Double.compare(b.score,a.score));
+            recordSignalHistory(scans);
             final int success=scans.size(), fail=failed, total=attempted;
             runOnUiThread(() -> showScans(scans, success, fail, total));
         });
@@ -357,6 +370,7 @@ public class MainActivity extends Activity {
                             if (fresh != null) merged.set(i, fresh);
                         }
                         merged.sort((a,b)->Double.compare(b.score,a.score));
+                        updatePaperPositionPrices(merged);
                         showScans(merged, merged.size(), 0, merged.size());
                         String time = new java.text.SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
                         status.setText("İlk 18 güçlü sinyal yenilendi • " + time + " • " + updated.size() + "/" + snapshot.size() + " başarılı • " + universeLabel);
@@ -492,8 +506,237 @@ public class MainActivity extends Activity {
         new android.app.AlertDialog.Builder(this)
                 .setTitle("📊 " + s.q.name + " Analizi")
                 .setMessage(msg)
-                .setPositiveButton("KAPAT", null)
+                .setPositiveButton("SANAL ALIM", (dialog, which) -> showPaperBuyDialog(s))
+                .setNegativeButton("KAPAT", null)
                 .show();
+    }
+
+    private android.content.SharedPreferences paperPrefs() {
+        return getSharedPreferences("hisse_coin_paper_v1", MODE_PRIVATE);
+    }
+
+    private void recordSignalHistory(ArrayList<Scan> scans) {
+        synchronized (MainActivity.class) {
+            JSONArray history;
+            try { history = new JSONArray(paperPrefs().getString("signal_history", "[]")); }
+            catch (Exception e) { history = new JSONArray(); }
+            long now = System.currentTimeMillis();
+            int count = Math.min(18, scans.size());
+            for (int i = 0; i < count; i++) {
+                Scan scan = scans.get(i);
+                JSONObject item = new JSONObject();
+                try {
+                    item.put("time", now);
+                    item.put("name", scan.q.name);
+                    item.put("price", scan.q.price);
+                    item.put("priceText", scan.q.priceText);
+                    item.put("score", scan.score);
+                    item.put("change", scan.q.change);
+                    item.put("coin", scan.q.coin);
+                    history.put(item);
+                } catch (Exception ignored) { }
+            }
+            while (history.length() > 360) history.remove(0);
+            paperPrefs().edit().putString("signal_history", history.toString()).apply();
+        }
+    }
+
+    private void showSignalHistory() {
+        JSONArray history;
+        try { history = new JSONArray(paperPrefs().getString("signal_history", "[]")); }
+        catch (Exception e) { history = new JSONArray(); }
+        if (history.length() == 0) {
+            new android.app.AlertDialog.Builder(this).setTitle("Sinyal Geçmişi")
+                    .setMessage("Henüz kayıt yok. Önce tam piyasa taraması yap.")
+                    .setPositiveButton("TAMAM", null).show();
+            return;
+        }
+        ArrayList<String> lines = new ArrayList<>();
+        for (int i = history.length() - 1; i >= 0 && lines.size() < 60; i--) {
+            JSONObject item = history.optJSONObject(i);
+            if (item == null) continue;
+            String time = new java.text.SimpleDateFormat("dd.MM HH:mm", Locale.getDefault())
+                    .format(new Date(item.optLong("time", 0)));
+            lines.add(time + "  " + item.optString("name") +
+                    " • " + item.optString("priceText") +
+                    " • Skor " + item.optInt("score") +
+                    " • 24s " + String.format(Locale.US, "%+.2f%%", item.optDouble("change")));
+        }
+        new android.app.AlertDialog.Builder(this).setTitle("Sinyal Geçmişi • Son kayıtlar")
+                .setItems(lines.toArray(new String[0]), null)
+                .setPositiveButton("KAPAT", null).show();
+    }
+
+    private void showPaperBuyDialog(Scan scan) {
+        EditText quantity = new EditText(this);
+        quantity.setSingleLine(true);
+        quantity.setInputType(8194);
+        quantity.setText("1");
+        quantity.setHint("Miktar / adet");
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Sanal alım • " + scan.q.name)
+                .setMessage("Anlık referans fiyatı: " + scan.q.priceText +
+                        "\\nGerçek emir gönderilmez. Deneme işlemi kaydedilir.")
+                .setView(quantity)
+                .setPositiveButton("SANAL AL", (dialog, which) -> {
+                    double qty;
+                    try { qty = Double.parseDouble(quantity.getText().toString().trim()); }
+                    catch (Exception e) { qty = 0; }
+                    if (qty <= 0 || scan.q.price <= 0) {
+                        Toast.makeText(this, "Geçerli bir miktar gir.", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    addPaperPosition(scan, qty);
+                })
+                .setNegativeButton("İPTAL", null).show();
+    }
+
+    private void addPaperPosition(Scan scan, double quantity) {
+        synchronized (MainActivity.class) {
+            JSONArray positions;
+            try { positions = new JSONArray(paperPrefs().getString("paper_positions", "[]")); }
+            catch (Exception e) { positions = new JSONArray(); }
+            JSONObject p = new JSONObject();
+            try {
+                p.put("id", System.currentTimeMillis());
+                p.put("name", scan.q.name);
+                p.put("coin", scan.q.coin);
+                p.put("entry", scan.q.price);
+                p.put("current", scan.q.price);
+                p.put("quantity", quantity);
+                p.put("score", scan.score);
+                p.put("opened", System.currentTimeMillis());
+                positions.put(p);
+                paperPrefs().edit().putString("paper_positions", positions.toString()).apply();
+            } catch (Exception e) {
+                Toast.makeText(this, "Sanal işlem kaydedilemedi.", Toast.LENGTH_LONG).show();
+                return;
+            }
+        }
+        Toast.makeText(this, "Sanal alım kaydedildi: " + scan.q.name, Toast.LENGTH_LONG).show();
+    }
+
+    private void updatePaperPositionPrices(ArrayList<Scan> scans) {
+        synchronized (MainActivity.class) {
+            JSONArray positions;
+            try { positions = new JSONArray(paperPrefs().getString("paper_positions", "[]")); }
+            catch (Exception e) { return; }
+            boolean changed = false;
+            for (int i = 0; i < positions.length(); i++) {
+                JSONObject p = positions.optJSONObject(i);
+                if (p == null) continue;
+                String name = p.optString("name");
+                boolean coin = p.optBoolean("coin");
+                for (Scan scan : scans) {
+                    if (scan.q.name.equals(name) && scan.q.coin == coin) {
+                        try { p.put("current", scan.q.price); changed = true; }
+                        catch (Exception ignored) { }
+                        break;
+                    }
+                }
+            }
+            if (changed) paperPrefs().edit().putString("paper_positions", positions.toString()).apply();
+        }
+    }
+
+    private void showPaperPortfolio() {
+        JSONArray positions;
+        JSONArray closed;
+        try { positions = new JSONArray(paperPrefs().getString("paper_positions", "[]")); }
+        catch (Exception e) { positions = new JSONArray(); }
+        try { closed = new JSONArray(paperPrefs().getString("paper_closed", "[]")); }
+        catch (Exception e) { closed = new JSONArray(); }
+
+        ArrayList<String> lines = new ArrayList<>();
+        ArrayList<Integer> openIndexes = new ArrayList<>();
+        double unrealized = 0;
+        for (int i = 0; i < positions.length(); i++) {
+            JSONObject p = positions.optJSONObject(i);
+            if (p == null) continue;
+            double entry = p.optDouble("entry", 0);
+            double current = p.optDouble("current", entry);
+            double qty = p.optDouble("quantity", 0);
+            double pnl = (current - entry) * qty;
+            double pct = entry > 0 ? (current - entry) * 100.0 / entry : 0;
+            unrealized += pnl;
+            lines.add("AÇIK • " + p.optString("name") + " • miktar " +
+                    String.format(Locale.US, "%.6g", qty) + "\\nGiriş " +
+                    String.format(Locale.US, "%.6f", entry) + " → Son " +
+                    String.format(Locale.US, "%.6f", current) + "\\nK/Z " +
+                    String.format(Locale.US, "%+.6f", pnl) + " (" +
+                    String.format(Locale.US, "%+.2f%%", pct) + ") • dokun: kapat");
+            openIndexes.add(i);
+        }
+        int openCount = lines.size();
+        for (int i = closed.length() - 1; i >= 0 && lines.size() < openCount + 10; i--) {
+            JSONObject p = closed.optJSONObject(i);
+            if (p == null) continue;
+            lines.add("KAPALI • " + p.optString("name") + " • sonuç " +
+                    String.format(Locale.US, "%+.6f", p.optDouble("pnl", 0)) +
+                    " • " + new java.text.SimpleDateFormat("dd.MM HH:mm", Locale.getDefault())
+                    .format(new Date(p.optLong("closed", 0))));
+        }
+        String summary = "Açık işlem: " + openCount + " • Açık K/Z: " +
+                String.format(Locale.US, "%+.6f", unrealized) +
+                "\\nNot: Hisse fiyatları TL, kripto fiyatları USDT olabilir; toplamlar farklı para birimlerini karıştırabilir.";
+        if (lines.isEmpty()) summary += "\\nHenüz sanal işlem yok. Bir sinyalin detayına girip SANAL ALIM seç.";
+        final JSONArray currentPositions = positions;
+        final JSONArray currentClosed = closed;
+        final ArrayList<Integer> selectableOpen = openIndexes;
+        new android.app.AlertDialog.Builder(this).setTitle("Sanal Portföy")
+                .setMessage(summary)
+                .setItems(lines.toArray(new String[0]), (dialog, which) -> {
+                    if (which < selectableOpen.size()) confirmClosePaperPosition(selectableOpen.get(which));
+                })
+                .setPositiveButton("YENİLE", (dialog, which) -> showPaperPortfolio())
+                .setNegativeButton("KAPAT", null).show();
+    }
+
+    private void confirmClosePaperPosition(int index) {
+        JSONArray positions;
+        try { positions = new JSONArray(paperPrefs().getString("paper_positions", "[]")); }
+        catch (Exception e) { return; }
+        JSONObject p = positions.optJSONObject(index);
+        if (p == null) return;
+        double entry = p.optDouble("entry", 0);
+        double current = p.optDouble("current", entry);
+        double qty = p.optDouble("quantity", 0);
+        double pnl = (current - entry) * qty;
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Sanal işlemi kapat?")
+                .setMessage(p.optString("name") + "\\nKapanış referans fiyatı: " +
+                        String.format(Locale.US, "%.6f", current) + "\\nSanal K/Z: " +
+                        String.format(Locale.US, "%+.6f", pnl) +
+                        "\\nBu, son kaydedilen fiyattır; canlı fiyat garantisi değildir.")
+                .setPositiveButton("İŞLEMİ KAPAT", (dialog, which) -> closePaperPosition(index))
+                .setNegativeButton("GERİ", null).show();
+    }
+
+    private void closePaperPosition(int index) {
+        synchronized (MainActivity.class) {
+            JSONArray positions, closed;
+            try { positions = new JSONArray(paperPrefs().getString("paper_positions", "[]")); }
+            catch (Exception e) { return; }
+            try { closed = new JSONArray(paperPrefs().getString("paper_closed", "[]")); }
+            catch (Exception e) { closed = new JSONArray(); }
+            if (index < 0 || index >= positions.length()) return;
+            JSONObject p = positions.optJSONObject(index);
+            if (p == null) return;
+            double entry = p.optDouble("entry", 0);
+            double current = p.optDouble("current", entry);
+            double qty = p.optDouble("quantity", 0);
+            try {
+                p.put("pnl", (current - entry) * qty);
+                p.put("closed", System.currentTimeMillis());
+                closed.put(p);
+                while (closed.length() > 100) closed.remove(0);
+                positions.remove(index);
+                paperPrefs().edit().putString("paper_positions", positions.toString())
+                        .putString("paper_closed", closed.toString()).apply();
+            } catch (Exception ignored) { }
+        }
+        Toast.makeText(this, "Sanal işlem kapatıldı ve sonucu kaydedildi.", Toast.LENGTH_LONG).show();
+        showPaperPortfolio();
     }
 
     private String reasonText(Quote q) {
