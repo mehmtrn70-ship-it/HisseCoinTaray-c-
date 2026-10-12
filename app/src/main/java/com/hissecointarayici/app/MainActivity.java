@@ -994,19 +994,20 @@ public class MainActivity extends Activity {
         else if(q.price<breakout) condition="Fiyat alım bölgesinin üzerinde; geri çekilme beklemek daha kontrollü.";
         else condition="Direnç aşılmış; kırılımın kalıcılığı ayrıca izlenmeli.";
 
-        return "ALIM–SATIM PLANLAYICI\n\n"+
-                "Alım bölgesi: "+num(entryLow, q.coin)+" – "+num(entryHigh, q.coin)+"\n"+
-                "Kırılım seviyesi: "+num(breakout, q.coin)+"\n"+
-                "Hedef 1: "+num(target1, q.coin)+"\n"+
-                "Hedef 2: "+num(target2, q.coin)+"\n"+
-                "Hedef 3: "+num(target3, q.coin)+"\n"+
-                "Zarar-kes: "+num(stop, q.coin)+"\n"+
-                "Risk/Getiri (H1): "+String.format(Locale.US,"%.2f",rr)+"R\n\n"+
-                "Destek: "+num(support, q.coin)+"\n"+
-                "Direnç: "+num(resistance, q.coin)+"\n"+
-                "ATR14: "+num(atr, q.coin)+"\n\n"+
-                "Durum: "+condition+"\n\n"+
-                "Hesaplama; destek/direnç, ATR14 ve mevcut fiyat kullanılarak dinamik yapılır.\n"+
+        String unit = currencyFor(q.coin);
+        return "ALIM–SATIM PLANLAYICI ("+unit+")\\n\\n"+
+                "Alım bölgesi: "+num(entryLow, q.coin)+" – "+num(entryHigh, q.coin)+" "+unit+"\\n"+
+                "Kırılım seviyesi: "+num(breakout, q.coin)+" "+unit+"\\n"+
+                "Hedef 1: "+num(target1, q.coin)+" "+unit+"\\n"+
+                "Hedef 2: "+num(target2, q.coin)+" "+unit+"\\n"+
+                "Hedef 3: "+num(target3, q.coin)+" "+unit+"\\n"+
+                "Zarar-kes: "+num(stop, q.coin)+" "+unit+"\\n"+
+                "Risk/Getiri (H1): "+String.format(Locale.US,"%.2f",rr)+"R\\n\\n"+
+                "Destek: "+num(support, q.coin)+" "+unit+"\\n"+
+                "Direnç: "+num(resistance, q.coin)+" "+unit+"\\n"+
+                "ATR14: "+num(atr, q.coin)+" "+unit+"\\n\\n"+
+                "Durum: "+condition+"\\n\\n"+
+                "Hesaplama; destek/direnç, ATR14 ve mevcut fiyat kullanılarak dinamik yapılır.\\n"+
                 "Bu bölüm teknik senaryodur, yatırım tavsiyesi değildir.";
     }
 
