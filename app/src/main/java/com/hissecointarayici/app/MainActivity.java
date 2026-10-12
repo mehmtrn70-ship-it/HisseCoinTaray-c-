@@ -671,6 +671,29 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void choosePaperPositionToClose() {
+        JSONArray ps;
+        try { ps = new JSONArray(paperPrefs().getString("paper_positions", "[]")); }
+        catch (Exception e) { ps = new JSONArray(); }
+        ArrayList<Integer> indexes = new ArrayList<>();
+        ArrayList<String> names = new ArrayList<>();
+        for (int i = 0; i < ps.length(); i++) {
+            JSONObject p = ps.optJSONObject(i);
+            if (p == null) continue;
+            indexes.add(i);
+            names.add(p.optString("name") + " • Alış " +
+                    formatPortfolioPrice(p.optDouble("entry", 0), p.optBoolean("coin", false)) + " " +
+                    p.optString("currency", currencyFor(p.optBoolean("coin", false))));
+        }
+        if (names.isEmpty()) {
+            Toast.makeText(this, "Kapatılacak açık işlem yok.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new android.app.AlertDialog.Builder(this).setTitle("Kapatılacak sanal işlemi seç")
+                .setItems(names.toArray(new String[0]), (dialog, which) -> confirmClosePaperPosition(indexes.get(which)))
+                .setNegativeButton("GERİ", null).show();
+    }
+
     private void showPaperPortfolio() {
         JSONArray positions;
         JSONArray closed;
@@ -727,6 +750,7 @@ public class MainActivity extends Activity {
         new android.app.AlertDialog.Builder(this).setTitle("Sanal Portföy")
                 .setMessage(summary + "\n\n" + lines.toString())
                 .setPositiveButton("FİYATLARI YENİLE", (dialog, which) -> refreshPaperPricesThenShow())
+                .setNeutralButton("İŞLEM KAPAT", (dialog, which) -> choosePaperPositionToClose())
                 .setNegativeButton("KAPAT", null).show();
     }
 
