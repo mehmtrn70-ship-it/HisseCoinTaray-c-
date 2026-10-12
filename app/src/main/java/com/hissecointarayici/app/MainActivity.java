@@ -500,8 +500,8 @@ public class MainActivity extends Activity {
                 "\n\n" + planText(s.q) +
                 "\n\nNot: Bu analiz teknik göstergelere dayanır ve yatırım tavsiyesi değildir.";
 
-        // Koruma: eski/bozuk metinlerden gelen literal \\n ifadelerini gerçek satır sonuna çevir.
-        msg = msg.replace("\\n", "\n");
+        // Koruma: eski/bozuk metinlerden gelen literal \n ifadelerini gerçek satır sonuna çevir.
+        msg = msg.replace("\n", "\n");
 
         new android.app.AlertDialog.Builder(this)
                 .setTitle("📊 " + s.q.name + " Analizi")
@@ -575,8 +575,8 @@ public class MainActivity extends Activity {
         quantity.setHint("Miktar / adet");
         new android.app.AlertDialog.Builder(this)
                 .setTitle("Sanal alım • " + scan.q.name)
-                .setMessage("Anlık referans fiyatı: " + scan.q.priceText +
-                        "\\nGerçek emir gönderilmez. Deneme işlemi kaydedilir.")
+                .setMessage("Anlık referans fiyatı: " + scan.q.priceText + " " + currencyFor(scan.q.coin) +
+                        "\nGerçek emir gönderilmez. Deneme işlemi kaydedilir.")
                 .setView(quantity)
                 .setPositiveButton("SANAL AL", (dialog, which) -> {
                     double qty;
@@ -601,6 +601,7 @@ public class MainActivity extends Activity {
                 p.put("id", System.currentTimeMillis());
                 p.put("name", scan.q.name);
                 p.put("coin", scan.q.coin);
+                p.put("currency", currencyFor(scan.q.coin));
                 p.put("entry", scan.q.price);
                 p.put("current", scan.q.price);
                 p.put("quantity", quantity);
@@ -639,6 +640,14 @@ public class MainActivity extends Activity {
         }
     }
 
+    private String currencyFor(boolean coin) {
+        return coin ? "USDT" : "TL";
+    }
+
+    private String formatPortfolioPrice(double value, boolean coin) {
+        return String.format(Locale.US, coin ? "%.8f" : "%.2f", value);
+    }
+
     private void showPaperPortfolio() {
         JSONArray positions;
         JSONArray closed;
@@ -649,44 +658,53 @@ public class MainActivity extends Activity {
 
         ArrayList<String> lines = new ArrayList<>();
         ArrayList<Integer> openIndexes = new ArrayList<>();
-        double unrealized = 0;
+        double unrealizedTL = 0;
+        double unrealizedUSDT = 0;
         for (int i = 0; i < positions.length(); i++) {
             JSONObject p = positions.optJSONObject(i);
             if (p == null) continue;
             double entry = p.optDouble("entry", 0);
             double current = p.optDouble("current", entry);
             double qty = p.optDouble("quantity", 0);
-            double pnl = (current - entry) * qty;
-            double pct = entry > 0 ? (current - entry) * 100.0 / entry : 0;
-            unrealized += pnl;
-            lines.add("AÇIK • " + p.optString("name") + " • miktar " +
-                    String.format(Locale.US, "%.6g", qty) + "\\nGiriş " +
-                    String.format(Locale.US, "%.6f", entry) + " → Son " +
-                    String.format(Locale.US, "%.6f", current) + "\\nK/Z " +
-                    String.format(Locale.US, "%+.6f", pnl) + " (" +
-                    String.format(Locale.US, "%+.2f%%", pct) + ") • dokun: kapat");
+            boolean coin = p.optBoolean("coin", false);
+            String currency = p.optString("currency", currencyFor(coin));
+            double cost = entry * qty;
+            double value = current * qty;
+            double pnl = value - cost;
+            double pct = cost > 0 ? pnl * 100.0 / cost : 0;
+            if ("USDT".equals(currency)) unrealizedUSDT += pnl;
+            else unrealizedTL += pnl;
+
+            lines.add("AÇIK • " + p.optString("name") + " • " +
+                    String.format(Locale.US, "%.6g", qty) + " adet\n" +
+                    "Alış: " + formatPortfolioPrice(entry, coin) + " " + currency +
+                    " • Maliyet: " + formatPortfolioPrice(cost, coin) + " " + currency + "\n" +
+                    "Son: " + formatPortfolioPrice(current, coin) + " " + currency +
+                    " • Değer: " + formatPortfolioPrice(value, coin) + " " + currency + "\n" +
+                    "K/Z: " + String.format(Locale.US, "%+.2f", pnl) + " " + currency +
+                    " (" + String.format(Locale.US, "%+.2f%%", pct) + ") • kapatmak için dokun");
             openIndexes.add(i);
         }
         int openCount = lines.size();
         for (int i = closed.length() - 1; i >= 0 && lines.size() < openCount + 10; i--) {
             JSONObject p = closed.optJSONObject(i);
             if (p == null) continue;
+            boolean coin = p.optBoolean("coin", false);
+            String currency = p.optString("currency", currencyFor(coin));
             lines.add("KAPALI • " + p.optString("name") + " • sonuç " +
-                    String.format(Locale.US, "%+.6f", p.optDouble("pnl", 0)) +
+                    String.format(Locale.US, "%+.2f", p.optDouble("pnl", 0)) + " " + currency +
                     " • " + new java.text.SimpleDateFormat("dd.MM HH:mm", Locale.getDefault())
                     .format(new Date(p.optLong("closed", 0))));
         }
-        String summary = "Açık işlem: " + openCount + " • Açık K/Z: " +
-                String.format(Locale.US, "%+.6f", unrealized) +
-                "\\nNot: Hisse fiyatları TL, kripto fiyatları USDT olabilir; toplamlar farklı para birimlerini karıştırabilir.";
-        if (lines.isEmpty()) summary += "\\nHenüz sanal işlem yok. Bir sinyalin detayına girip SANAL ALIM seç.";
-        final JSONArray currentPositions = positions;
-        final JSONArray currentClosed = closed;
-        final ArrayList<Integer> selectableOpen = openIndexes;
+        String summary = "Açık işlem: " + openCount +
+                "\nAçık K/Z — TL: " + String.format(Locale.US, "%+.2f TL", unrealizedTL) +
+                "\nAçık K/Z — USDT: " + String.format(Locale.US, "%+.2f USDT", unrealizedUSDT) +
+                "\nNot: TL ve USDT ayrı hesaplanır; farklı para birimleri toplanmaz.";
+        if (lines.isEmpty()) summary += "\nHenüz sanal işlem yok. Bir sinyalin detayına girip SANAL ALIM seç.";
         new android.app.AlertDialog.Builder(this).setTitle("Sanal Portföy")
                 .setMessage(summary)
                 .setItems(lines.toArray(new String[0]), (dialog, which) -> {
-                    if (which < selectableOpen.size()) confirmClosePaperPosition(selectableOpen.get(which));
+                    if (which < openIndexes.size()) confirmClosePaperPosition(openIndexes.get(which));
                 })
                 .setPositiveButton("YENİLE", (dialog, which) -> showPaperPortfolio())
                 .setNegativeButton("KAPAT", null).show();
@@ -704,10 +722,12 @@ public class MainActivity extends Activity {
         double pnl = (current - entry) * qty;
         new android.app.AlertDialog.Builder(this)
                 .setTitle("Sanal işlemi kapat?")
-                .setMessage(p.optString("name") + "\\nKapanış referans fiyatı: " +
-                        String.format(Locale.US, "%.6f", current) + "\\nSanal K/Z: " +
-                        String.format(Locale.US, "%+.6f", pnl) +
-                        "\\nBu, son kaydedilen fiyattır; canlı fiyat garantisi değildir.")
+                .setMessage(p.optString("name") + "\nKapanış referans fiyatı: " +
+                        formatPortfolioPrice(current, p.optBoolean("coin", false)) + " " +
+                        p.optString("currency", currencyFor(p.optBoolean("coin", false))) + "\nSanal K/Z: " +
+                        String.format(Locale.US, "%+.2f", pnl) + " " +
+                        p.optString("currency", currencyFor(p.optBoolean("coin", false))) +
+                        "\nBu, son kaydedilen fiyattır; canlı fiyat garantisi değildir.")
                 .setPositiveButton("İŞLEMİ KAPAT", (dialog, which) -> closePaperPosition(index))
                 .setNegativeButton("GERİ", null).show();
     }
