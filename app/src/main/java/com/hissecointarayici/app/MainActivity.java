@@ -418,7 +418,7 @@ public class MainActivity extends Activity {
         card.addView(top);
 
         TextView details = new TextView(this);
-        details.setText("Fiyat: " + s.q.priceText + "    24s: " + pct(s.q.change) +
+        details.setText("Fiyat: " + s.q.priceText + " " + (s.q.coin ? "USDT" : "TL") + "    24s: " + pct(s.q.change) +
                 "    RSI: " + String.format(Locale.US,"%.1f",s.q.rsi) +
                 "    MACD: " + String.format(Locale.US,"%.3f",s.q.macd));
         details.setTextSize(14);
