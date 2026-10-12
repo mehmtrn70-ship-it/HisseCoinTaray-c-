@@ -128,7 +128,7 @@ public class MainActivity extends Activity {
         root.addView(toolsRow);
 
         historyBtn.setOnClickListener(v -> showSignalHistory());
-        portfolioBtn.setOnClickListener(v -> showPaperPortfolio());
+        portfolioBtn.setOnClickListener(v -> refreshPaperPricesThenShow());
 
         status = new TextView(this);
         status.setText("Varsayılan tarama: BIST 150 + Coin Tümü");
@@ -648,6 +648,29 @@ public class MainActivity extends Activity {
         return String.format(Locale.US, coin ? "%.8f" : "%.2f", value);
     }
 
+    private void refreshPaperPricesThenShow() {
+        refreshPool.execute(() -> {
+            JSONArray ps;
+            try { ps = new JSONArray(paperPrefs().getString("paper_positions", "[]")); }
+            catch (Exception e) { ps = new JSONArray(); }
+            boolean changed = false;
+            for (int i = 0; i < ps.length(); i++) {
+                JSONObject p = ps.optJSONObject(i);
+                if (p == null) continue;
+                String name = p.optString("name", "");
+                boolean coin = p.optBoolean("coin", false);
+                try {
+                    Quote q = coin ? fetchBinance(name + "USDT") : fetchYahoo(name + ".IS", name);
+                    p.put("current", q.price);
+                    p.put("priceUpdated", System.currentTimeMillis());
+                    changed = true;
+                } catch (Exception ignored) { }
+            }
+            if (changed) paperPrefs().edit().putString("paper_positions", ps.toString()).apply();
+            runOnUiThread(() -> showPaperPortfolio());
+        });
+    }
+
     private void showPaperPortfolio() {
         JSONArray positions;
         JSONArray closed;
@@ -703,7 +726,7 @@ public class MainActivity extends Activity {
         if (lines.isEmpty()) summary += "\nHenüz sanal işlem yok. Bir sinyalin detayına girip SANAL ALIM seç.";
         new android.app.AlertDialog.Builder(this).setTitle("Sanal Portföy")
                 .setMessage(summary + "\n\n" + lines.toString())
-                .setPositiveButton("YENİLE", (dialog, which) -> showPaperPortfolio())
+                .setPositiveButton("FİYATLARI YENİLE", (dialog, which) -> refreshPaperPricesThenShow())
                 .setNegativeButton("KAPAT", null).show();
     }
 
