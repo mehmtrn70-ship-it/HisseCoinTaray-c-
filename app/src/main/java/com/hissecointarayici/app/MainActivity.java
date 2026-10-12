@@ -1011,9 +1011,9 @@ public class MainActivity extends Activity {
     private String pct(double x){return String.format(Locale.US,"%+.2f%%",x);}
 
     static class Quote {
-        String name,priceText; boolean coin; double price,change,rsi,sma,macd,volumeRatio,atr,support,resistance;
-        Quote(String n,String p,double pr,double ch,double r,double s){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=0;volumeRatio=1;atr=0;support=0;resistance=0;coin=false;}
-        Quote(String n,String p,double pr,double ch,double r,double s,double m,double vr,double a,double sup,double res,boolean isCoin){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=m;volumeRatio=vr;atr=a;support=sup;resistance=res;coin=isCoin;}
+        String name,priceText,currency; boolean coin; double price,change,rsi,sma,macd,volumeRatio,atr,support,resistance;
+        Quote(String n,String p,double pr,double ch,double r,double s){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=0;volumeRatio=1;atr=0;support=0;resistance=0;coin=false;currency="TL";}
+        Quote(String n,String p,double pr,double ch,double r,double s,double m,double vr,double a,double sup,double res,boolean isCoin){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=m;volumeRatio=vr;atr=a;support=sup;resistance=res;coin=isCoin;currency=isCoin?"USDT":"TL";}
     }
 
     static class Scan {
