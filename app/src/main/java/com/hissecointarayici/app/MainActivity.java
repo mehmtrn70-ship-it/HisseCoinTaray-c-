@@ -1,6 +1,12 @@
 package com.hissecointarayici.app;
 
 import android.app.Activity;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.graphics.Color;
@@ -28,6 +34,8 @@ public class MainActivity extends Activity {
     private TextView status, marketBadge;
     private EditText searchInput;
     private Spinner assetFilter, scoreFilter;
+    private static final int NOTIFICATION_PERMISSION_REQUEST = 1901;
+    private static final String SIGNAL_CHANNEL_ID = "strong_signals";
     private final ExecutorService pool = Executors.newFixedThreadPool(8);
     private final ExecutorService refreshPool = Executors.newFixedThreadPool(2);
     private final Handler mainHandler = new Handler();
@@ -65,6 +73,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
+        createSignalNotificationChannel();
         buildUi();
         loadAll();
     }
@@ -125,11 +134,17 @@ public class MainActivity extends Activity {
         toolsRow.setPadding(0, 0, 0, 8);
         Button historyBtn = makeButton("SİNYAL GEÇMİŞİ");
         Button portfolioBtn = makeButton("SANAL PORTFÖY");
+        Button alertsBtn = makeButton("SİNYAL BİLDİRİMİ");
         toolsRow.addView(historyBtn, new LinearLayout.LayoutParams(0, -2, 1));
         toolsRow.addView(portfolioBtn, new LinearLayout.LayoutParams(0, -2, 1));
         root.addView(toolsRow);
+        LinearLayout alertRow = new LinearLayout(this);
+        alertRow.setGravity(Gravity.CENTER);
+        alertRow.addView(alertsBtn, new LinearLayout.LayoutParams(-1, -2));
+        root.addView(alertRow);
 
         historyBtn.setOnClickListener(v -> showSignalHistory());
+        alertsBtn.setOnClickListener(v -> showNotificationSettings());
         portfolioBtn.setOnClickListener(v -> refreshPaperPricesThenShow());
 
         status = new TextView(this);
@@ -188,6 +203,73 @@ public class MainActivity extends Activity {
 
         scroll.addView(root);
         setContentView(scroll);
+    }
+
+
+    private void showNotificationSettings() {
+        android.content.SharedPreferences prefs = getSharedPreferences("signal_alert_settings", MODE_PRIVATE);
+        int current = prefs.getInt("threshold", 80);
+        String[] options = {"Skor 70 ve üzeri", "Skor 80 ve üzeri", "Skor 90 ve üzeri"};
+        int selected = current >= 90 ? 2 : current >= 80 ? 1 : 0;
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Güçlü sinyal bildirimleri")
+                .setMessage("Bildirimler, uygulama tarama yaparken veya ilk 18 sinyal yenilenirken kontrol edilir. Uygulama tamamen kapalıyken sürekli tarama yapmaz.")
+                .setSingleChoiceItems(options, selected, (dialog, which) -> {
+                    int threshold = which == 0 ? 70 : which == 1 ? 80 : 90;
+                    prefs.edit().putInt("threshold", threshold).putBoolean("enabled", true).apply();
+                    if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+                        requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, NOTIFICATION_PERMISSION_REQUEST);
+                    }
+                    Toast.makeText(this, "Bildirim eşiği " + threshold + " olarak ayarlandı.", Toast.LENGTH_SHORT).show();
+                    dialog.dismiss();
+                })
+                .setNegativeButton("BİLDİRİMLERİ KAPAT", (dialog, which) -> {
+                    prefs.edit().putBoolean("enabled", false).apply();
+                    Toast.makeText(this, "Sinyal bildirimleri kapatıldı.", Toast.LENGTH_SHORT).show();
+                })
+                .setPositiveButton("KAPAT", null)
+                .show();
+    }
+
+    private void createSignalNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel channel = new NotificationChannel(SIGNAL_CHANNEL_ID, "Güçlü sinyaller", NotificationManager.IMPORTANCE_DEFAULT);
+            channel.setDescription("Seçilen skor eşiğine ulaşan hisse ve coin sinyalleri");
+            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager != null) manager.createNotificationChannel(channel);
+        }
+    }
+
+    private void maybeNotifyStrongSignals(ArrayList<Scan> scans) {
+        android.content.SharedPreferences prefs = getSharedPreferences("signal_alert_settings", MODE_PRIVATE);
+        if (!prefs.getBoolean("enabled", false)) return;
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) return;
+        int threshold = prefs.getInt("threshold", 80);
+        String day = new java.text.SimpleDateFormat("yyyyMMdd", Locale.US).format(new Date());
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) return;
+        int checked = Math.min(18, scans.size());
+        for (int i = 0; i < checked; i++) {
+            Scan scan = scans.get(i);
+            if (scan.score < threshold) continue;
+            String key = "sent_" + day + "_" + (scan.q.coin ? "C_" : "S_") + scan.q.name;
+            if (prefs.getBoolean(key, false)) continue;
+            String title = "Güçlü sinyal: " + scan.q.name;
+            String body = "Skor " + String.format(Locale.US, "%.0f", scan.score) + "/100 • " +
+                    scan.q.priceText + " " + currencyFor(scan.q.coin) + " • 24s " + pct(scan.q.change);
+            android.app.Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+                    ? new android.app.Notification.Builder(this, SIGNAL_CHANNEL_ID)
+                    : new android.app.Notification.Builder(this);
+            builder.setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle(title).setContentText(body).setStyle(new android.app.Notification.BigTextStyle().bigText(body))
+                    .setAutoCancel(true);
+            Intent intent = new Intent(this, MainActivity.class);
+            PendingIntent pending = PendingIntent.getActivity(this, scan.q.name.hashCode(), intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0));
+            builder.setContentIntent(pending);
+            manager.notify(Math.abs(scan.q.name.hashCode()), builder.build());
+            prefs.edit().putBoolean(key, true).apply();
+        }
     }
 
     private void chooseUniverse() {
@@ -353,6 +435,7 @@ public class MainActivity extends Activity {
     private void showScans(ArrayList<Scan> scans, int success, int failed, int attempted) {
         latestScans.clear();
         latestScans.addAll(scans);
+        maybeNotifyStrongSignals(scans);
         renderFilteredScans();
         status.setText("Tarama tamamlandı • " + success + "/" + attempted + " başarılı • " + failed + " başarısız • " + universeLabel);
         marketBadge.setText("●  OTOMATİK YENİLEME AÇIK");
