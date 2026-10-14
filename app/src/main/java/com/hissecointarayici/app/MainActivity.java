@@ -35,6 +35,8 @@ public class MainActivity extends Activity {
     private TextView status, marketBadge;
     private EditText searchInput;
     private Spinner assetFilter, scoreFilter;
+    private boolean darkTheme = false;
+    private LinearLayout rootLayout;
     private static final int NOTIFICATION_PERMISSION_REQUEST = 1901;
     private static final String SIGNAL_CHANNEL_ID = "strong_signals";
     private final ExecutorService pool = Executors.newFixedThreadPool(8);
@@ -84,14 +86,15 @@ public class MainActivity extends Activity {
         scroll.setFillViewport(true);
 
         LinearLayout root = new LinearLayout(this);
+        rootLayout = root;
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(18, 18, 18, 28);
-        root.setBackgroundColor(Color.rgb(247,248,250));
+        root.setBackgroundColor(themeBg());
 
         TextView title = new TextView(this);
         title.setText("Hisse&Coin Tarayıcı");
         title.setTextSize(28);
-        title.setTextColor(Color.rgb(30,35,45));
+        title.setTextColor(themeText());
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
         root.addView(title, new LinearLayout.LayoutParams(-1, -2));
@@ -143,6 +146,19 @@ public class MainActivity extends Activity {
         alertRow.setGravity(Gravity.CENTER);
         alertRow.addView(alertsBtn, new LinearLayout.LayoutParams(-1, -2));
         root.addView(alertRow);
+
+        LinearLayout personalRow = new LinearLayout(this);
+        personalRow.setGravity(Gravity.CENTER);
+        Button watchBtn = makeButton("★ TAKİP LİSTESİ");
+        Button priceAlertBtn = makeButton("🔔 FİYAT ALARMI");
+        Button themeBtn = makeButton("◐ TEMA");
+        personalRow.addView(watchBtn, new LinearLayout.LayoutParams(0, -2, 1));
+        personalRow.addView(priceAlertBtn, new LinearLayout.LayoutParams(0, -2, 1));
+        personalRow.addView(themeBtn, new LinearLayout.LayoutParams(0, -2, 1));
+        root.addView(personalRow);
+        watchBtn.setOnClickListener(v -> showWatchlist());
+        priceAlertBtn.setOnClickListener(v -> showPriceAlerts());
+        themeBtn.setOnClickListener(v -> toggleTheme());
 
         historyBtn.setOnClickListener(v -> showSignalHistory());
         alertsBtn.setOnClickListener(v -> showNotificationSettings());
@@ -204,8 +220,147 @@ public class MainActivity extends Activity {
 
         scroll.addView(root);
         setContentView(scroll);
+        darkTheme = getSharedPreferences("ui_settings", MODE_PRIVATE).getBoolean("dark_theme", false);
+        applyTheme();
     }
 
+
+
+    private int themeBg() { return darkTheme ? Color.rgb(18,22,30) : Color.rgb(247,248,250); }
+    private int themeCard() { return darkTheme ? Color.rgb(34,40,52) : Color.WHITE; }
+    private int themeText() { return darkTheme ? Color.rgb(240,243,248) : Color.rgb(30,35,45); }
+    private int themeMuted() { return darkTheme ? Color.rgb(190,198,210) : Color.rgb(80,85,95); }
+    private void toggleTheme() {
+        darkTheme = !darkTheme;
+        getSharedPreferences("ui_settings", MODE_PRIVATE).edit().putBoolean("dark_theme", darkTheme).apply();
+        applyTheme(); renderFilteredScans();
+        Toast.makeText(this, darkTheme ? "Koyu tema açık" : "Açık tema açık", Toast.LENGTH_SHORT).show();
+    }
+    private void applyTheme() { if (rootLayout != null) rootLayout.setBackgroundColor(themeBg()); }
+    private android.content.SharedPreferences watchPrefs() { return getSharedPreferences("watchlist", MODE_PRIVATE); }
+    private String watchKey(String name, boolean coin) { return (coin ? "C:" : "S:") + name; }
+    private boolean isWatched(String name, boolean coin) {
+        Set<String> set = new HashSet<>(watchPrefs().getStringSet("items", new HashSet<>()));
+        return set.contains(watchKey(name, coin));
+    }
+    private void toggleWatch(String name, boolean coin) {
+        Set<String> set = new HashSet<>(watchPrefs().getStringSet("items", new HashSet<>()));
+        String key = watchKey(name, coin);
+        if (set.contains(key)) set.remove(key); else set.add(key);
+        watchPrefs().edit().putStringSet("items", set).apply();
+        Toast.makeText(this, set.contains(key) ? name + " takip listesine eklendi" : name + " takip listesinden çıkarıldı", Toast.LENGTH_SHORT).show();
+    }
+    private void showWatchlist() {
+        Set<String> items = new HashSet<>(watchPrefs().getStringSet("items", new HashSet<>()));
+        ScrollView sc = new ScrollView(this);
+        LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(18,12,18,12);
+        if (items.isEmpty()) {
+            TextView empty = new TextView(this); empty.setText("Takip listen boş. Tarama sonuçlarında ☆ Takibe ekle düğmesini kullan."); empty.setPadding(8,12,8,12); box.addView(empty);
+        } else {
+            ArrayList<String> sorted = new ArrayList<>(items); Collections.sort(sorted);
+            for (String item : sorted) {
+                String[] parts = item.split(":",2); if(parts.length<2) continue;
+                boolean coin = "C".equals(parts[0]); String name = parts[1];
+                LinearLayout row = new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL);
+                TextView label = new TextView(this); label.setText(name + " • " + currencyFor(coin)); label.setTextSize(16); label.setPadding(6,10,6,10);
+                row.addView(label,new LinearLayout.LayoutParams(0,-2,1));
+                Button alarm = makeButton("Alarm"); Button remove = makeButton("Kaldır");
+                row.addView(alarm); row.addView(remove); box.addView(row);
+                alarm.setOnClickListener(v -> {
+                    Scan found = findScan(name, coin);
+                    if(found != null) showCreatePriceAlert(found.q);
+                    else Toast.makeText(this,"Önce tarama yapıp bu varlığın güncel fiyatını al.",Toast.LENGTH_LONG).show();
+                });
+                remove.setOnClickListener(v -> { toggleWatch(name,coin); showWatchlist(); });
+            }
+        }
+        sc.addView(box);
+        new android.app.AlertDialog.Builder(this).setTitle("★ Takip Listesi").setView(sc).setPositiveButton("KAPAT",null).show();
+    }
+    private Scan findScan(String name, boolean coin) {
+        for(Scan scan:latestScans) if(scan.q.coin==coin && scan.q.name.equalsIgnoreCase(name)) return scan;
+        return null;
+    }
+    private android.content.SharedPreferences priceAlertPrefs() { return getSharedPreferences("price_alerts", MODE_PRIVATE); }
+    private void showPriceAlerts() {
+        JSONArray alerts;
+        try { alerts = new JSONArray(priceAlertPrefs().getString("items", "[]")); } catch(Exception e) { alerts = new JSONArray(); }
+        ScrollView sc = new ScrollView(this);
+        LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(18,12,18,12);
+        if(alerts.length()==0) {
+            TextView empty=new TextView(this); empty.setText("Henüz fiyat alarmı yok. Tarama kartından Fiyat alarmı oluşturabilirsin."); empty.setPadding(8,12,8,12); box.addView(empty);
+        }
+        for(int i=0;i<alerts.length();i++) {
+            JSONObject a=alerts.optJSONObject(i); if(a==null) continue;
+            String name=a.optString("name"), kind=a.optString("kind"), unit=a.optString("currency");
+            String target = kind.equals("price") ? "Hedef: "+a.optDouble("target",0)+" "+unit : "Değişim: "+a.optDouble("percent",0)+"% (başlangıç "+a.optDouble("base",0)+" "+unit+")";
+            TextView line=new TextView(this); line.setText(name+" • "+target+" • "+(a.optBoolean("active",true)?"Aktif": "Kapalı")+(a.optBoolean("triggered",false)?" • Tetiklendi":"")); line.setPadding(4,8,4,8); box.addView(line);
+            Button del=makeButton("Alarmı sil"); box.addView(del);
+            final int idx=i; del.setOnClickListener(v -> { removePriceAlert(idx); showPriceAlerts(); });
+        }
+        sc.addView(box);
+        new android.app.AlertDialog.Builder(this).setTitle("🔔 Fiyat Alarmları").setView(sc).setPositiveButton("KAPAT",null).setNeutralButton("YENİ ALARM",(d,w)->{
+            if(!latestScans.isEmpty()) {
+                String[] names=new String[latestScans.size()];
+                for(int i=0;i<names.length;i++) names[i]=latestScans.get(i).q.name+" ("+currencyFor(latestScans.get(i).q.coin)+")";
+                new android.app.AlertDialog.Builder(this).setTitle("Varlık seç").setItems(names,(dd,which)->showCreatePriceAlert(latestScans.get(which).q)).show();
+            } else Toast.makeText(this,"Önce tarama yap.",Toast.LENGTH_SHORT).show();
+        }).show();
+    }
+    private void removePriceAlert(int index) {
+        try { JSONArray a=new JSONArray(priceAlertPrefs().getString("items","[]")); if(index>=0&&index<a.length()) a.remove(index); priceAlertPrefs().edit().putString("items",a.toString()).apply(); } catch(Exception ignored) {}
+    }
+    private void showCreatePriceAlert(Quote q) {
+        LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL); form.setPadding(20,8,20,4);
+        TextView current=new TextView(this); current.setText(q.name+" • Güncel referans: "+q.priceText+" "+currencyFor(q.coin)); form.addView(current);
+        Spinner kind=new Spinner(this); ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,new String[]{"Hedef fiyata gelince","Başlangıç fiyatından yüzde değişim"}); adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item); kind.setAdapter(adapter); form.addView(kind);
+        EditText value=new EditText(this); value.setInputType(8194); value.setHint("Hedef fiyat veya yüzde (ör. 5 veya -5)"); form.addView(value);
+        TextView hint=new TextView(this); hint.setText("Yüzde alarmında +5 = %5 yükseliş, -5 = %5 düşüş. Kontrol tarama/yenileme sırasında yapılır."); form.addView(hint);
+        new android.app.AlertDialog.Builder(this).setTitle("🔔 "+q.name+" alarmı").setView(form).setPositiveButton("KAYDET",(d,w)->{
+            String raw=value.getText().toString().trim().replace(",",".");
+            try {
+                double v=Double.parseDouble(raw);
+                if(v==0 || (kind.getSelectedItemPosition()==0 && v<=0)) throw new NumberFormatException();
+                JSONArray arr=new JSONArray(priceAlertPrefs().getString("items","[]"));
+                JSONObject a=new JSONObject(); a.put("name",q.name); a.put("coin",q.coin); a.put("currency",currencyFor(q.coin)); a.put("kind",kind.getSelectedItemPosition()==0?"price":"percent"); a.put("target",kind.getSelectedItemPosition()==0?v:0); a.put("percent",kind.getSelectedItemPosition()==1?v:0); a.put("base",q.price); a.put("active",true); a.put("created",System.currentTimeMillis()); arr.put(a);
+                priceAlertPrefs().edit().putString("items",arr.toString()).apply();
+                Toast.makeText(this,"Alarm kaydedildi. Tarama sırasında kontrol edilecek.",Toast.LENGTH_LONG).show();
+            } catch(Exception e) { Toast.makeText(this,"Geçerli bir sayı gir. Hedef fiyat pozitif olmalı; yüzde sıfır olamaz.",Toast.LENGTH_LONG).show(); }
+        }).setNegativeButton("İPTAL",null).show();
+    }
+    private void checkPriceAlerts(ArrayList<Scan> scans) {
+        JSONArray alerts;
+        try { alerts=new JSONArray(priceAlertPrefs().getString("items","[]")); } catch(Exception e) { return; }
+        boolean changed=false;
+        for(int i=0;i<alerts.length();i++) {
+            JSONObject a=alerts.optJSONObject(i); if(a==null || !a.optBoolean("active",true) || a.optBoolean("triggered",false)) continue;
+            Scan match=findScan(a.optString("name"),a.optBoolean("coin",false));
+            if(match==null) continue;
+            double price=match.q.price; boolean hit=false; String reason="";
+            if("price".equals(a.optString("kind"))) {
+                double target=a.optDouble("target",0); hit=price>=target;
+                reason="hedef "+target+" "+a.optString("currency");
+            } else {
+                double base=a.optDouble("base",0), pct=a.optDouble("percent",0);
+                if(base>0) { double actual=(price-base)*100.0/base; hit=pct>0?actual>=pct:actual<=pct; reason=String.format(Locale.US,"hedef %+.2f%%, mevcut %+.2f%%",pct,actual); }
+            }
+            if(hit) {
+                sendPriceAlarm(match.q,reason,i);
+                try { a.put("triggered",true); a.put("triggeredAt",System.currentTimeMillis()); changed=true; } catch(Exception ignored) {}
+            }
+        }
+        if(changed) priceAlertPrefs().edit().putString("items",alerts.toString()).apply();
+    }
+    private void sendPriceAlarm(Quote q,String reason,int id) {
+        if(Build.VERSION.SDK_INT>=33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this,"Fiyat alarmı tetiklendi: "+q.name+" (bildirim izni kapalı)",Toast.LENGTH_LONG).show(); return;
+        }
+        NotificationManager manager=(NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE); if(manager==null)return;
+        String body=q.name+" • "+q.priceText+" "+currencyFor(q.coin)+" • "+reason;
+        android.app.Notification.Builder builder=Build.VERSION.SDK_INT>=26?new android.app.Notification.Builder(this,SIGNAL_CHANNEL_ID):new android.app.Notification.Builder(this);
+        builder.setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("Fiyat alarmı").setContentText(body).setStyle(new android.app.Notification.BigTextStyle().bigText(body)).setAutoCancel(true);
+        manager.notify(700000+id,builder.build());
+    }
 
     private void showNotificationSettings() {
         android.content.SharedPreferences prefs = getSharedPreferences("signal_alert_settings", MODE_PRIVATE);
@@ -437,6 +592,7 @@ public class MainActivity extends Activity {
         latestScans.clear();
         latestScans.addAll(scans);
         maybeNotifyStrongSignals(scans);
+        checkPriceAlerts(scans);
         renderFilteredScans();
         status.setText("Tarama tamamlandı • " + success + "/" + attempted + " başarılı • " + failed + " başarısız • " + universeLabel);
         marketBadge.setText("●  OTOMATİK YENİLEME AÇIK");
@@ -557,7 +713,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(16, 14, 16, 14);
-        setRoundedBackground(card, Color.WHITE, 16);
+        setRoundedBackground(card, themeCard(), 16);
 
         TextView top = new TextView(this);
         String signal = signal(s.score);
@@ -573,14 +729,14 @@ public class MainActivity extends Activity {
                 "    RSI: " + String.format(Locale.US,"%.1f",s.q.rsi) +
                 "    MACD: " + String.format(Locale.US,"%.3f",s.q.macd));
         details.setTextSize(14);
-        details.setTextColor(Color.rgb(80,85,95));
+        details.setTextColor(themeMuted());
         details.setPadding(0, 6, 0, 4);
         card.addView(details);
 
         TextView why = new TextView(this);
         why.setText("✓ " + reasonText(s.q));
         why.setTextSize(13);
-        why.setTextColor(Color.rgb(65,70,80));
+        why.setTextColor(themeMuted());
         card.addView(why);
 
         TextView action = new TextView(this);
