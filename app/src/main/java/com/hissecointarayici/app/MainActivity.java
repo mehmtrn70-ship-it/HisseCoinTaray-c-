@@ -26,6 +26,8 @@ import java.util.concurrent.Callable;
 public class MainActivity extends Activity {
     private LinearLayout list;
     private TextView status, marketBadge;
+    private EditText searchInput;
+    private Spinner assetFilter, scoreFilter;
     private final ExecutorService pool = Executors.newFixedThreadPool(8);
     private final ExecutorService refreshPool = Executors.newFixedThreadPool(2);
     private final Handler mainHandler = new Handler();
@@ -137,9 +139,46 @@ public class MainActivity extends Activity {
         status.setPadding(8, 10, 8, 10);
         root.addView(status);
 
+        LinearLayout filterRow = new LinearLayout(this);
+        filterRow.setOrientation(LinearLayout.VERTICAL);
+        filterRow.setPadding(0, 0, 0, 8);
+        searchInput = new EditText(this);
+        searchInput.setSingleLine(true);
+        searchInput.setTextSize(14);
+        searchInput.setHint("Hisse veya coin ara (ör. ASELS, BTC)");
+        searchInput.setPadding(12, 8, 12, 8);
+        filterRow.addView(searchInput, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout selectors = new LinearLayout(this);
+        selectors.setGravity(Gravity.CENTER_VERTICAL);
+        assetFilter = new Spinner(this);
+        ArrayAdapter<String> assetAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
+                new String[]{"Tümü", "Sadece hisseler", "Sadece coinler"});
+        assetAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        assetFilter.setAdapter(assetAdapter);
+        scoreFilter = new Spinner(this);
+        ArrayAdapter<String> scoreAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
+                new String[]{"Tüm skorlar", "Skor 70+", "Skor 80+", "Skor 90+"});
+        scoreAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        scoreFilter.setAdapter(scoreAdapter);
+        selectors.addView(assetFilter, new LinearLayout.LayoutParams(0, -2, 1));
+        selectors.addView(scoreFilter, new LinearLayout.LayoutParams(0, -2, 1));
+        filterRow.addView(selectors);
+        root.addView(filterRow);
+
         list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         root.addView(list);
+        searchInput.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { renderFilteredScans(); }
+            @Override public void afterTextChanged(android.text.Editable e) {}
+        });
+        android.widget.AdapterView.OnItemSelectedListener filterListener = new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) { renderFilteredScans(); }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        };
+        assetFilter.setOnItemSelectedListener(filterListener);
+        scoreFilter.setOnItemSelectedListener(filterListener);
 
         stocksBtn.setOnClickListener(v -> loadStocks());
         coinsBtn.setOnClickListener(v -> loadCoins());
@@ -314,27 +353,55 @@ public class MainActivity extends Activity {
     private void showScans(ArrayList<Scan> scans, int success, int failed, int attempted) {
         latestScans.clear();
         latestScans.addAll(scans);
-        list.removeAllViews();
-
-        TextView heading = new TextView(this);
-        heading.setText("🔥 GÜNÜN EN GÜÇLÜ SİNYALLERİ");
-        heading.setTextSize(18);
-        heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        heading.setTextColor(Color.rgb(35,40,50));
-        heading.setPadding(4, 12, 4, 8);
-        list.addView(heading);
-
-        int n=0;
-        for(Scan s:scans) {
-            if(n++ >= 18) break;
-            list.addView(scanCard(s, n));
-        }
-
+        renderFilteredScans();
         status.setText("Tarama tamamlandı • " + success + "/" + attempted + " başarılı • " + failed + " başarısız • " + universeLabel);
         marketBadge.setText("●  OTOMATİK YENİLEME AÇIK");
         setRoundedBackground(marketBadge, Color.rgb(40,125,85), 18);
         mainHandler.removeCallbacks(autoRefreshRunnable);
         mainHandler.postDelayed(autoRefreshRunnable, AUTO_REFRESH_MS);
+    }
+
+    private void renderFilteredScans() {
+        if (list == null) return;
+        list.removeAllViews();
+        String query = searchInput == null ? "" : searchInput.getText().toString().trim().toLowerCase(Locale.ROOT);
+        int type = assetFilter == null ? 0 : assetFilter.getSelectedItemPosition();
+        int selectedScore = scoreFilter == null ? 0 : scoreFilter.getSelectedItemPosition();
+        int minScore = selectedScore == 1 ? 70 : selectedScore == 2 ? 80 : selectedScore == 3 ? 90 : 0;
+        ArrayList<Scan> filtered = new ArrayList<>();
+        for (Scan s : latestScans) {
+            if (type == 1 && s.q.coin) continue;
+            if (type == 2 && !s.q.coin) continue;
+            if (s.score < minScore) continue;
+            if (!query.isEmpty() && !s.q.name.toLowerCase(Locale.ROOT).contains(query)) continue;
+            filtered.add(s);
+        }
+        TextView heading = new TextView(this);
+        heading.setText("🔥 GÜNÜN EN GÜÇLÜ SİNYALLERİ • " + filtered.size() + " sonuç");
+        heading.setTextSize(18);
+        heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        heading.setTextColor(Color.rgb(35,40,50));
+        heading.setPadding(4, 12, 4, 8);
+        list.addView(heading);
+        if (filtered.isEmpty()) {
+            TextView empty = new TextView(this);
+            empty.setText("Bu filtrelere uygun sonuç yok. Aramayı veya skor eşiğini değiştir.");
+            empty.setTextSize(14);
+            empty.setPadding(8, 12, 8, 12);
+            empty.setTextColor(Color.rgb(90,95,105));
+            list.addView(empty);
+            return;
+        }
+        int shown = Math.min(18, filtered.size());
+        for (int i = 0; i < shown; i++) list.addView(scanCard(filtered.get(i), i + 1));
+        if (filtered.size() > shown) {
+            TextView more = new TextView(this);
+            more.setText("En güçlü " + shown + " sonuç gösteriliyor • filtrelenen toplam: " + filtered.size());
+            more.setTextSize(12);
+            more.setPadding(8, 8, 8, 12);
+            more.setTextColor(Color.rgb(95,100,110));
+            list.addView(more);
+        }
     }
 
     private void refreshTopSignals() {
