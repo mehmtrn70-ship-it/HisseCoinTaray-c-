@@ -293,7 +293,7 @@ public class MainActivity extends Activity {
         for(int i=0;i<alerts.length();i++) {
             JSONObject a=alerts.optJSONObject(i); if(a==null) continue;
             String name=a.optString("name"), kind=a.optString("kind"), unit=a.optString("currency");
-            String target = kind.equals("price") ? "Hedef: "+a.optDouble("target",0)+" "+unit : "Değişim: "+a.optDouble("percent",0)+"% (başlangıç "+a.optDouble("base",0)+" "+unit+")";
+            String target = kind.equals("price") ? ("below".equals(a.optString("direction"))?"Altına düşünce: ":"Üstüne çıkınca: ")+a.optDouble("target",0)+" "+unit : "Değişim: "+a.optDouble("percent",0)+"% (başlangıç "+a.optDouble("base",0)+" "+unit+")";
             TextView line=new TextView(this); line.setText(name+" • "+target+" • "+(a.optBoolean("active",true)?"Aktif": "Kapalı")+(a.optBoolean("triggered",false)?" • Tetiklendi":"")); line.setPadding(4,8,4,8); box.addView(line);
             Button del=makeButton("Alarmı sil"); box.addView(del);
             final int idx=i; del.setOnClickListener(v -> { removePriceAlert(idx); showPriceAlerts(); });
@@ -313,16 +313,16 @@ public class MainActivity extends Activity {
     private void showCreatePriceAlert(Quote q) {
         LinearLayout form=new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL); form.setPadding(20,8,20,4);
         TextView current=new TextView(this); current.setText(q.name+" • Güncel referans: "+q.priceText+" "+currencyFor(q.coin)); form.addView(current);
-        Spinner kind=new Spinner(this); ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,new String[]{"Hedef fiyata gelince","Başlangıç fiyatından yüzde değişim"}); adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item); kind.setAdapter(adapter); form.addView(kind);
+        Spinner kind=new Spinner(this); ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,new String[]{"Hedef fiyatın üstüne çıkınca","Hedef fiyatın altına düşünce","Başlangıç fiyatından yüzde değişim"}); adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item); kind.setAdapter(adapter); form.addView(kind);
         EditText value=new EditText(this); value.setInputType(8194); value.setHint("Hedef fiyat veya yüzde (ör. 5 veya -5)"); form.addView(value);
         TextView hint=new TextView(this); hint.setText("Yüzde alarmında +5 = %5 yükseliş, -5 = %5 düşüş. Kontrol tarama/yenileme sırasında yapılır."); form.addView(hint);
         new android.app.AlertDialog.Builder(this).setTitle("🔔 "+q.name+" alarmı").setView(form).setPositiveButton("KAYDET",(d,w)->{
             String raw=value.getText().toString().trim().replace(",",".");
             try {
                 double v=Double.parseDouble(raw);
-                if(v==0 || (kind.getSelectedItemPosition()==0 && v<=0)) throw new NumberFormatException();
+                if(v==0 || (kind.getSelectedItemPosition()!=2 && v<=0)) throw new NumberFormatException();
                 JSONArray arr=new JSONArray(priceAlertPrefs().getString("items","[]"));
-                JSONObject a=new JSONObject(); a.put("name",q.name); a.put("coin",q.coin); a.put("currency",currencyFor(q.coin)); a.put("kind",kind.getSelectedItemPosition()==0?"price":"percent"); a.put("target",kind.getSelectedItemPosition()==0?v:0); a.put("percent",kind.getSelectedItemPosition()==1?v:0); a.put("base",q.price); a.put("active",true); a.put("created",System.currentTimeMillis()); arr.put(a);
+                JSONObject a=new JSONObject(); a.put("name",q.name); a.put("coin",q.coin); a.put("currency",currencyFor(q.coin)); a.put("kind",kind.getSelectedItemPosition()==2?"percent":"price"); a.put("direction",kind.getSelectedItemPosition()==1?"below":"above"); a.put("target",kind.getSelectedItemPosition()!=2?v:0); a.put("percent",kind.getSelectedItemPosition()==2?v:0); a.put("base",q.price); a.put("active",true); a.put("created",System.currentTimeMillis()); arr.put(a);
                 priceAlertPrefs().edit().putString("items",arr.toString()).apply();
                 Toast.makeText(this,"Alarm kaydedildi. Tarama sırasında kontrol edilecek.",Toast.LENGTH_LONG).show();
             } catch(Exception e) { Toast.makeText(this,"Geçerli bir sayı gir. Hedef fiyat pozitif olmalı; yüzde sıfır olamaz.",Toast.LENGTH_LONG).show(); }
@@ -338,8 +338,8 @@ public class MainActivity extends Activity {
             if(match==null) continue;
             double price=match.q.price; boolean hit=false; String reason="";
             if("price".equals(a.optString("kind"))) {
-                double target=a.optDouble("target",0); hit=price>=target;
-                reason="hedef "+target+" "+a.optString("currency");
+                double target=a.optDouble("target",0); hit="below".equals(a.optString("direction")) ? price<=target : price>=target;
+                reason=("below".equals(a.optString("direction"))?"hedefin altı ":"hedefin üstü ")+target+" "+a.optString("currency");
             } else {
                 double base=a.optDouble("base",0), pct=a.optDouble("percent",0);
                 if(base>0) { double actual=(price-base)*100.0/base; hit=pct>0?actual>=pct:actual<=pct; reason=String.format(Locale.US,"hedef %+.2f%%, mevcut %+.2f%%",pct,actual); }
@@ -748,6 +748,13 @@ public class MainActivity extends Activity {
         action.setPadding(0, 8, 0, 0);
         card.addView(action);
 
+        LinearLayout actions = new LinearLayout(this);
+        actions.setGravity(Gravity.END);
+        Button watch = makeButton(isWatched(s.q.name, s.q.coin) ? "★ Takipte" : "☆ Takibe ekle");
+        Button alarm = makeButton("Fiyat alarmı");
+        actions.addView(watch); actions.addView(alarm); card.addView(actions);
+        watch.setOnClickListener(v -> { toggleWatch(s.q.name, s.q.coin); watch.setText(isWatched(s.q.name, s.q.coin) ? "★ Takipte" : "☆ Takibe ekle"); });
+        alarm.setOnClickListener(v -> showCreatePriceAlert(s.q));
         card.setOnClickListener(v -> showAnalysis(s));
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1,-2);
         p.setMargins(0, 6, 0, 6);
