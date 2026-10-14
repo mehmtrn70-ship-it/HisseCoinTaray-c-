@@ -552,19 +552,66 @@ public class MainActivity extends Activity {
             return;
         }
         ArrayList<String> lines = new ArrayList<>();
+        int evaluated1h=0, positive1h=0, evaluated24h=0, positive24h=0, evaluated7d=0, positive7d=0;
         for (int i = history.length() - 1; i >= 0 && lines.size() < 60; i--) {
             JSONObject item = history.optJSONObject(i);
             if (item == null) continue;
-            String time = new java.text.SimpleDateFormat("dd.MM HH:mm", Locale.getDefault())
-                    .format(new Date(item.optLong("time", 0)));
-            lines.add(time + "  " + item.optString("name") +
-                    " • " + item.optString("priceText") +
+            long t = item.optLong("time", 0);
+            double price = item.optDouble("price", 0);
+            boolean coin = item.optBoolean("coin", false);
+            String name = item.optString("name");
+            String time = new java.text.SimpleDateFormat("dd.MM HH:mm", Locale.getDefault()).format(new Date(t));
+            String oneHour = historyReturn(history, i, 60L*60*1000, 6L*60*60*1000);
+            String oneDay = historyReturn(history, i, 24L*60*60*1000, 36L*60*60*1000);
+            String oneWeek = historyReturn(history, i, 7L*24*60*60*1000, 3L*24*60*60*1000);
+            if (!"bekleniyor".equals(oneHour)) { evaluated1h++; if (oneHour.startsWith("+")) positive1h++; }
+            if (!"bekleniyor".equals(oneDay)) { evaluated24h++; if (oneDay.startsWith("+")) positive24h++; }
+            if (!"bekleniyor".equals(oneWeek)) { evaluated7d++; if (oneWeek.startsWith("+")) positive7d++; }
+            lines.add(time + "  " + name + " • " + item.optString("priceText") +
                     " • Skor " + item.optInt("score") +
-                    " • 24s " + String.format(Locale.US, "%+.2f%%", item.optDouble("change")));
+                    "\n  1s: " + oneHour + "  |  24s: " + oneDay + "  |  7g: " + oneWeek);
         }
-        new android.app.AlertDialog.Builder(this).setTitle("Sinyal Geçmişi • Son kayıtlar")
-                .setItems(lines.toArray(new String[0]), null)
-                .setPositiveButton("KAPAT", null).show();
+        String summary = "Geçmiş fiyat kayıtları: " + history.length() +
+                "\n1 saat: " + positive1h + "/" + evaluated1h + " pozitif ölçüm" +
+                "\n24 saat: " + positive24h + "/" + evaluated24h + " pozitif ölçüm" +
+                "\n7 gün: " + positive7d + "/" + evaluated7d + " pozitif ölçüm" +
+                "\n'Bekleniyor' = hedef zaman için henüz yeterli sonraki fiyat kaydı yok. Bu oranlar geçmiş gözlemdir, garanti değildir.";
+        TextView content = new TextView(this);
+        content.setText(summary + "\n\n" + android.text.TextUtils.join("\n\n", lines));
+        content.setTextSize(14);
+        content.setPadding(24, 16, 24, 16);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(content);
+        new android.app.AlertDialog.Builder(this).setTitle("Sinyal Geçmişi • Performans")
+                .setView(scroll).setPositiveButton("KAPAT", null).show();
+    }
+
+    private String historyReturn(JSONArray history, int baseIndex, long targetMs, long toleranceMs) {
+        JSONObject base = history.optJSONObject(baseIndex);
+        if (base == null) return "bekleniyor";
+        long baseTime = base.optLong("time", 0);
+        double basePrice = base.optDouble("price", 0);
+        if (baseTime <= 0 || basePrice <= 0) return "bekleniyor";
+        String name = base.optString("name");
+        boolean coin = base.optBoolean("coin", false);
+        JSONObject nearest = null;
+        long nearestDiff = Long.MAX_VALUE;
+        for (int j = 0; j < history.length(); j++) {
+            if (j == baseIndex) continue;
+            JSONObject candidate = history.optJSONObject(j);
+            if (candidate == null || !name.equals(candidate.optString("name")) ||
+                    coin != candidate.optBoolean("coin", false)) continue;
+            long elapsed = candidate.optLong("time", 0) - baseTime;
+            if (elapsed < targetMs || elapsed > targetMs + toleranceMs) continue;
+            long diff = elapsed - targetMs;
+            if (diff < nearestDiff && candidate.optDouble("price", 0) > 0) {
+                nearest = candidate;
+                nearestDiff = diff;
+            }
+        }
+        if (nearest == null) return "bekleniyor";
+        double change = (nearest.optDouble("price", 0) - basePrice) * 100.0 / basePrice;
+        return String.format(Locale.US, "%+.2f%%", change);
     }
 
     private void showPaperBuyDialog(Scan scan) {
