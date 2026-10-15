@@ -126,12 +126,21 @@ public class MainActivity extends Activity {
         Button scanBtn = makeButton("TARAMA");
         Button refresh = makeButton("YENİLE");
         Button universeBtn = makeButton("EVREN");
-        buttons.addView(stocksBtn);
-        buttons.addView(coinsBtn);
-        buttons.addView(scanBtn);
-        buttons.addView(refresh);
-        buttons.addView(universeBtn);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        buttons.setWeightSum(4);
+        for (Button topButton : new Button[]{stocksBtn, coinsBtn, scanBtn, refresh}) {
+            LinearLayout.LayoutParams topParams = new LinearLayout.LayoutParams(0, dp(48), 1);
+            topParams.setMargins(2, 0, 2, 0);
+            buttons.addView(topButton, topParams);
+        }
         root.addView(buttons);
+        LinearLayout universeRow = new LinearLayout(this);
+        universeRow.setPadding(0, 0, 0, 8);
+        universeBtn.setText("EVREN • Hisse ve Coin Kapsamı");
+        LinearLayout.LayoutParams universeParams = new LinearLayout.LayoutParams(-1, dp(48));
+        universeParams.setMargins(2, 0, 2, 0);
+        universeRow.addView(universeBtn, universeParams);
+        root.addView(universeRow);
 
         LinearLayout toolsRow = new LinearLayout(this);
         toolsRow.setGravity(Gravity.CENTER);
@@ -226,17 +235,47 @@ public class MainActivity extends Activity {
 
 
 
-    private int themeBg() { return darkTheme ? Color.rgb(18,22,30) : Color.rgb(247,248,250); }
-    private int themeCard() { return darkTheme ? Color.rgb(34,40,52) : Color.WHITE; }
-    private int themeText() { return darkTheme ? Color.rgb(240,243,248) : Color.rgb(30,35,45); }
-    private int themeMuted() { return darkTheme ? Color.rgb(190,198,210) : Color.rgb(80,85,95); }
+    private int dp(float value) { return (int)(value * getResources().getDisplayMetrics().density + 0.5f); }
+    private int themeBg() { return darkTheme ? Color.rgb(16,20,28) : Color.rgb(247,248,250); }
+    private int themeCard() { return darkTheme ? Color.rgb(35,43,57) : Color.WHITE; }
+    private int themeText() { return darkTheme ? Color.rgb(250,252,255) : Color.rgb(30,35,45); }
+    private int themeMuted() { return darkTheme ? Color.rgb(218,225,236) : Color.rgb(80,85,95); }
     private void toggleTheme() {
         darkTheme = !darkTheme;
         getSharedPreferences("ui_settings", MODE_PRIVATE).edit().putBoolean("dark_theme", darkTheme).apply();
         applyTheme(); renderFilteredScans();
         Toast.makeText(this, darkTheme ? "Koyu tema açık" : "Açık tema açık", Toast.LENGTH_SHORT).show();
     }
-    private void applyTheme() { if (rootLayout != null) rootLayout.setBackgroundColor(themeBg()); }
+    private void applyTheme() {
+        if (rootLayout != null) {
+            rootLayout.setBackgroundColor(themeBg());
+            recolorTree(rootLayout);
+        }
+    }
+    private void recolorTree(View view) {
+        if (view instanceof TextView) {
+            TextView t = (TextView)view;
+            if (t == marketBadge) return;
+            if (t instanceof Button) {
+                t.setTextColor(darkTheme ? Color.rgb(20,25,34) : Color.rgb(25,30,38));
+                t.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                    darkTheme ? Color.rgb(220,226,235) : Color.rgb(224,228,234)));
+            } else if (t instanceof EditText) {
+                t.setTextColor(themeText());
+                t.setHintTextColor(themeMuted());
+                t.setBackgroundTintList(android.content.res.ColorStateList.valueOf(themeMuted()));
+            } else {
+                t.setTextColor(themeText());
+            }
+        }
+        if (view instanceof Spinner) {
+            ((Spinner)view).setBackgroundTintList(android.content.res.ColorStateList.valueOf(themeMuted()));
+        }
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup)view;
+            for (int i=0;i<group.getChildCount();i++) recolorTree(group.getChildAt(i));
+        }
+    }
     private android.content.SharedPreferences watchPrefs() { return getSharedPreferences("watchlist", MODE_PRIVATE); }
     private String watchKey(String name, boolean coin) { return (coin ? "C:" : "S:") + name; }
     private boolean isWatched(String name, boolean coin) {
@@ -451,9 +490,13 @@ public class MainActivity extends Activity {
     private Button makeButton(String text) {
         Button b = new Button(this);
         b.setText(text);
-        b.setTextSize(11);
+        b.setTextSize(12);
+        b.setMinHeight(dp(46));
         b.setAllCaps(false);
-        b.setPadding(5, 0, 5, 0);
+        b.setPadding(dp(6), dp(4), dp(6), dp(4));
+        b.setTextColor(darkTheme ? Color.rgb(20,25,34) : Color.rgb(25,30,38));
+        b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                darkTheme ? Color.rgb(220,226,235) : Color.rgb(224,228,234)));
         return b;
     }
 
