@@ -84,7 +84,7 @@ public class MainActivity extends Activity {
     private void buildUi() {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        scroll.setClipToPadding(false);
+        scroll.setClipToPadding(true);
         scroll.setPadding(0, 0, 0, dp(24));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
             scroll.setOnApplyWindowInsetsListener((view, insets) -> {
