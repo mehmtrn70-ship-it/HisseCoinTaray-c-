@@ -85,12 +85,21 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.setClipToPadding(false);
-        scroll.setPadding(0, 0, 0, dp(12));
+        scroll.setPadding(0, 0, 0, dp(24));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
+            scroll.setOnApplyWindowInsetsListener((view, insets) -> {
+                int bottomInset = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                        ? insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom
+                        : insets.getSystemWindowInsetBottom();
+                view.setPadding(0, 0, 0, Math.max(dp(24), bottomInset + dp(20)));
+                return insets;
+            });
+        }
 
         LinearLayout root = new LinearLayout(this);
         rootLayout = root;
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(14), dp(14), dp(14), dp(44));
+        root.setPadding(dp(14), dp(14), dp(14), dp(20));
         root.setBackgroundColor(themeBg());
 
         TextView title = new TextView(this);
@@ -231,10 +240,6 @@ public class MainActivity extends Activity {
 
         scroll.addView(root);
         setContentView(scroll);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            getWindow().setNavigationBarColor(darkTheme ? Color.rgb(16,20,28) : Color.rgb(247,248,250));
-            getWindow().getDecorView().setSystemUiVisibility(darkTheme ? 0 : View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
-        }
         darkTheme = getSharedPreferences("ui_settings", MODE_PRIVATE).getBoolean("dark_theme", false);
         applyTheme();
     }
