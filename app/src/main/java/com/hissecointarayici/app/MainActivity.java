@@ -84,11 +84,13 @@ public class MainActivity extends Activity {
     private void buildUi() {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
+        scroll.setClipToPadding(false);
+        scroll.setPadding(0, 0, 0, dp(12));
 
         LinearLayout root = new LinearLayout(this);
         rootLayout = root;
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(18, 18, 18, 28);
+        root.setPadding(dp(14), dp(14), dp(14), dp(44));
         root.setBackgroundColor(themeBg());
 
         TextView title = new TextView(this);
@@ -229,6 +231,10 @@ public class MainActivity extends Activity {
 
         scroll.addView(root);
         setContentView(scroll);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            getWindow().setNavigationBarColor(darkTheme ? Color.rgb(16,20,28) : Color.rgb(247,248,250));
+            getWindow().getDecorView().setSystemUiVisibility(darkTheme ? 0 : View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        }
         darkTheme = getSharedPreferences("ui_settings", MODE_PRIVATE).getBoolean("dark_theme", false);
         applyTheme();
     }
@@ -250,6 +256,10 @@ public class MainActivity extends Activity {
         if (rootLayout != null) {
             rootLayout.setBackgroundColor(themeBg());
             recolorTree(rootLayout);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                getWindow().setNavigationBarColor(themeBg());
+                getWindow().getDecorView().setSystemUiVisibility(darkTheme ? 0 : View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+            }
         }
     }
     private void recolorTree(View view) {
@@ -663,7 +673,7 @@ public class MainActivity extends Activity {
         heading.setText("🔥 GÜNÜN EN GÜÇLÜ SİNYALLERİ • " + filtered.size() + " sonuç");
         heading.setTextSize(18);
         heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        heading.setTextColor(Color.rgb(35,40,50));
+        heading.setTextColor(themeText());
         heading.setPadding(4, 12, 4, 8);
         list.addView(heading);
         if (filtered.isEmpty()) {
@@ -671,7 +681,7 @@ public class MainActivity extends Activity {
             empty.setText("Bu filtrelere uygun sonuç yok. Aramayı veya skor eşiğini değiştir.");
             empty.setTextSize(14);
             empty.setPadding(8, 12, 8, 12);
-            empty.setTextColor(Color.rgb(90,95,105));
+            empty.setTextColor(themeMuted());
             list.addView(empty);
             return;
         }
@@ -682,7 +692,7 @@ public class MainActivity extends Activity {
             more.setText("En güçlü " + shown + " sonuç gösteriliyor • filtrelenen toplam: " + filtered.size());
             more.setTextSize(12);
             more.setPadding(8, 8, 8, 12);
-            more.setTextColor(Color.rgb(95,100,110));
+            more.setTextColor(themeMuted());
             list.addView(more);
         }
     }
