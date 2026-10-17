@@ -741,7 +741,7 @@ public class MainActivity extends Activity {
                         }
                         merged.sort((a,b)->Double.compare(b.score,a.score));
                         updatePaperPositionPrices(merged);
-                        showScans(merged, merged.size(), 0, merged.size());
+                        showScans(merged, merged.size(), 0, merged.size(), "");
                         String time = new java.text.SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
                         status.setText("İlk 18 güçlü sinyal yenilendi • " + time + " • " + updated.size() + "/" + snapshot.size() + " başarılı • " + universeLabel);
                         marketBadge.setText("●  FİYATLAR OTOMATİK GÜNCELLENDİ");
