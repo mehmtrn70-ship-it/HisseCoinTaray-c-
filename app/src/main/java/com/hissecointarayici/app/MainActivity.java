@@ -585,16 +585,20 @@ public class MainActivity extends Activity {
             ArrayList<Scan> scans=new ArrayList<>();
             int attempted=stocks.length+coins.length;
             int failed=0;
+            ArrayList<String> failedSymbols=new ArrayList<>();
             for(ScanResult r:stockResults) {
-                if(r.quote!=null) scans.add(new Scan(r.quote,score(r.quote))); else failed++;
+                if(r.quote!=null) scans.add(new Scan(r.quote,score(r.quote)));
+                else { failed++; if(r.symbol!=null && !r.symbol.trim().isEmpty()) failedSymbols.add(r.symbol+" (BIST)"); }
             }
             for(ScanResult r:coinResults) {
-                if(r.quote!=null) scans.add(new Scan(r.quote,score(r.quote))); else failed++;
+                if(r.quote!=null) scans.add(new Scan(r.quote,score(r.quote)));
+                else { failed++; if(r.symbol!=null && !r.symbol.trim().isEmpty()) failedSymbols.add(r.symbol+" (Coin)"); }
             }
             scans.sort((a,b)->Double.compare(b.score,a.score));
             recordSignalHistory(scans);
             final int success=scans.size(), fail=failed, total=attempted;
-            runOnUiThread(() -> showScans(scans, success, fail, total));
+            final String failedInfo=failedSymbols.isEmpty() ? "Sembol belirlenemedi" : String.join(", ", failedSymbols);
+            runOnUiThread(() -> showScans(scans, success, fail, total, failedInfo));
         });
     }
 
@@ -646,13 +650,14 @@ public class MainActivity extends Activity {
         setRoundedBackground(marketBadge, Color.rgb(40,125,85), 18);
     }
 
-    private void showScans(ArrayList<Scan> scans, int success, int failed, int attempted) {
+    private void showScans(ArrayList<Scan> scans, int success, int failed, int attempted, String failedInfo) {
         latestScans.clear();
         latestScans.addAll(scans);
         maybeNotifyStrongSignals(scans);
         checkPriceAlerts(scans);
         renderFilteredScans();
-        status.setText("Tarama tamamlandı • " + success + "/" + attempted + " başarılı • " + failed + " başarısız • " + universeLabel);
+        status.setText("Tarama tamamlandı • " + success + "/" + attempted + " başarılı • " + failed + " başarısız • " + universeLabel
+                + (failed > 0 ? "\\nBaşarısız sembol(ler): " + failedInfo : ""));
         marketBadge.setText("●  OTOMATİK YENİLEME AÇIK");
         setRoundedBackground(marketBadge, Color.rgb(40,125,85), 18);
         mainHandler.removeCallbacks(autoRefreshRunnable);
