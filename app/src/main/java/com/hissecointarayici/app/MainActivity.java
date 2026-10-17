@@ -657,7 +657,7 @@ public class MainActivity extends Activity {
         checkPriceAlerts(scans);
         renderFilteredScans();
         status.setText("Tarama tamamlandı • " + success + "/" + attempted + " başarılı • " + failed + " başarısız • " + universeLabel
-                + (failed > 0 ? "\\nBaşarısız sembol(ler): " + failedInfo : ""));
+                + (failed > 0 ? "\nBaşarısız sembol(ler): " + failedInfo : ""));
         marketBadge.setText("●  OTOMATİK YENİLEME AÇIK");
         setRoundedBackground(marketBadge, Color.rgb(40,125,85), 18);
         mainHandler.removeCallbacks(autoRefreshRunnable);
