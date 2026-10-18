@@ -11,6 +11,6 @@ android {
         minSdk = 23
         targetSdk = 36
         versionCode = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 22)
-        versionName = "25.0"
+        versionName = "26.0"
     }
 }
