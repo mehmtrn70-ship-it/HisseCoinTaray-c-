@@ -53,6 +53,9 @@ public class MainActivity extends Activity {
     };
     private static final int RETRIES = 2;
     private static final int NETWORK_TIMEOUT_MS = 15000;
+    // USDT'nin TL karşılığı yaklaşık USD/TRY kuru ile hesaplanır; bu bir borsa TRY fiyatı değildir.
+    private volatile double usdtTryRate = 0.0;
+    private volatile long usdtTryRateUpdatedAt = 0L;
 
     private static final String[] BIST100 = ("ASELS,TUPRS,BIMAS,THYAO,AKBNK,EREGL,YKBNK,KCHOL,ISCTR,SAHOL,TCELL,ASTOR,GARAN,CCOLA,ENKAI,SISE,TAVHL,FROTO,MGROS,SASA,TRALT,EKGYO,AEFES,MPARK,TOASO,KRDMD,PGSUS,GUBRF,HALKB,ENERY,ENJSA,TURSG,PETKM,TTKOM,GLYHO,AGHOL,TRMET,MAVI,TKFEN,VAKBN,TRGYO,OYAKC,AHGAZ,BRSAN,AKSEN,TABGD,DOHOL,ANSGR,SOKM,RGYAS,AYGAZ,ALARK,CIMSA,RYSAS,ULKER,AKSA,ISMEN,DOAS,CVKMD,OTKAR,GLRMK,TSKB,ARCLK,HEKTS,TTRAK,ISDMR,TRENJ,ALBRK,ECILC,CANTE,CWENE,ANHYT,TCKRC,BTCIM,AKFYE,SNGYO,GRSEL,ODAS,BRYAT,EGEEN,ECZYT,BERA,FENER,KCAER,ALTNY,EGGUB,LMKDC,PAHOL,ENTRA,ZOREN,OBAMS,GWIND,KARSN,KORDS,EUREN,BINHO,VESTL,KATMR,AKCNS,ALFAS").split(",");
     private static final String[] BIST_EXTRA = ("AKENR,AKFGY,AKSGY,AKYHO,ATATP,ATLAS,AVHOL,AVOD,AYDEM,AYEN,BAKAB,BANVT,BASGZ,BAYRK,BEGYO,BIGCH,BIOEN,BJKAS,BLCYT,BMSCH,BNTAS,BORLS,BRISA,BRKO,BRKSN,BRKVY,BRLSM,BRSAN,BSOKE,BUCIM,BULGS,BURCE,BURVA,CEMAS,CEMTS,CEOEM,COSMO,CRDFA,CUSAN,DAGI,TRHOL,DAPGM,DARDL,DCTTR,DERHL,DERIM,DESA,DESPC,DEVA,DITAS,DMSAS,DOBUR,DURDO,DYOBY,EDATA,EDIP,EFORC,EGPRO,EGSER,EKIZ,ELITE,EMKEL,EMNIS,ENDAE,ENSRI,ERBOS,ERCB,ERSU,ESCAR,ESCOM,ESEN,ETILR,EUPWR,EYGYO,FADE,FONET,FORMT,FORTE,FRIGO, GEDIK,GENTS,GEREL,GLBMD,GLCVY,GOODY,GRNYO,GSDDE,GSDHO,GTYGR,GUNDG,HATEK,HATSN,HDFGS,HEDEF,HKTM,HRKET,IDGYO,IEYHO,IHAAS,IHEVA,IHGZT,IHYAY,IMASM,INDES,INFO,INGRM,INTEM,INVEO,ISBIR,ISBTR,ISFIN,ISKPL,ISKUR,ISSEN,IZENR,IZFAS,IZINV,IZMDC,JANTS,KAPLM,KAREL,KARTN,KATMR,KAYSE,KENT,KERVN,KFEIN,KIMMR,KLGYO,KLKIM,KLMSN,KLNMA,KLRHO,KLSER,KLSYN,KMPUR,KNFRT,KONKA,KONTR,KONYA,KOPOL,KOTON,KRDMA,KRDMB,KRGYO,KRVGD,KSTUR,KUTPO,KUVVA,KZBGY,LIDER,LILAK,LKMNH,LOGO,LUKSK,MAALT,MACKO,MAKIM,MANAS,MARKA,MARTI,MATAS,MEDTR,MEGAP,MEGMT,MERCN,METRO,METUR,MHRGY,MIPAZ,MMCAS,MNDRS,MNDTR,MOBTL,MRGYO,MRSHL,MSGYO,MTRKS,MZHLD,NATEN,NETAS,NIBAS,NTGAZ,NUHCM,OBAMS,OBASE,ONCSM,ORGE,ORMA,OSMEN,OSTIM,OTTO,OYLUM,OZATD,OZGYO,OZKGY,OZRDN,OZSUB,OZYSR,PAGYO,PAMEL,PAPIL,PARSN,PASEU,PCILT,PEKGY,PENGD,PENTA,PETUN,PINSU,PKART,PKENT,PLTUR,PNLSN,PNSUT,POLHO,POLTK,PRDGS,PRKAB,PRKME,PRZMA,PSDTC,QNBFK,QNBTR,RALYH,RAYSG,REEDR,REKOR,RGYAS,RODRG,RTALB,RUBNS,RUZYE,RYGYO,SAMAT,SANEL,SANFM,SANKO,SARKY,SAYAS,SDTTR,SEGMN,SEKFK,SEKUR,SELEC,SELGD,SELVA,SERNT,SEYKM,SILVR,SKBNK,SKTAS,SMART,SMRTG,SMRVA,SNGYO,SNICA,SNPAM,SODSN,SONME,SRVGY,SUNTK,SURGY,SUWEN,TARKM,TATEN,TATGD,TAVHL,TBORG,TDGYO,TEKTU,TERA,TETMT,TGSAS,TKNSA,TLMAN,TMSN,TNZTP,TRCAS,TRILC,TSGYO,TSKB,TUCLK,TUKAS,TUREX,UFUK,ULAS,ULUFA,ULUSE,ULUUN,UNLU,USAK,VAKFA,VAKFN,VAKKO,VERTU,VERUS,VESBE,VKFYO,VKGYO,VKING,VRGYO,YAPRK,YATAS,YAYLA,YEOTK,YESIL,YGGYO,YIGIT,YKSLN,YUNSA,ZEDUR,ZRGYO").replace(" GEDIK","GEDIK").split(",");
@@ -800,7 +803,9 @@ public class MainActivity extends Activity {
         card.addView(top);
 
         TextView details = new TextView(this);
-        details.setText("Fiyat: " + s.q.priceText + " " + (s.q.coin ? "USDT" : "TL") + "    24s: " + pct(s.q.change) +
+        String priceLine = "Fiyat: " + s.q.priceText + " " + (s.q.coin ? "USDT" : "TL");
+        if (s.q.coin) priceLine += "\nTL karşılığı: " + estimatedTryPrice(s.q);
+        details.setText(priceLine + "    24s: " + pct(s.q.change) +
                 "    RSI: " + String.format(Locale.US,"%.1f",s.q.rsi) +
                 "    MACD: " + String.format(Locale.US,"%.3f",s.q.macd));
         details.setTextSize(14);
@@ -851,7 +856,9 @@ public class MainActivity extends Activity {
         card.addView(a);
 
         TextView b = new TextView(this);
-        b.setText("Fiyat: " + q.priceText + " " + currencyFor(q.coin) + "    RSI: " +
+        String quotePriceLine = "Fiyat: " + q.priceText + " " + currencyFor(q.coin);
+        if (q.coin) quotePriceLine += "\nTL karşılığı: " + estimatedTryPrice(q);
+        b.setText(quotePriceLine + "    RSI: " +
                 String.format(Locale.US,"%.1f",q.rsi) + "    SMA20: " +
                 (q.sma > 0 ? String.format(Locale.US,"%.2f",q.sma) : "-"));
         b.setTextSize(14);
@@ -878,6 +885,7 @@ public class MainActivity extends Activity {
                 "Skor: " + String.format(Locale.US,"%.0f/100",s.score) + "\n" +
                 "Sinyal: " + signal(s.score) + "\n\n" +
                 "Fiyat: " + s.q.priceText + " " + currencyFor(s.q.coin) + "\n" +
+                (s.q.coin ? "TL karşılığı (tahmini): " + estimatedTryPrice(s.q) + "\n" : "") +
                 "24 saat: " + pct(s.q.change) + "\n" +
                 "RSI: " + String.format(Locale.US,"%.1f",s.q.rsi) + " — " + rsiText + "\n" +
                 "SMA20: " + (s.q.sma > 0 ? formatPortfolioPrice(s.q.sma, s.q.coin) + " " + currencyFor(s.q.coin) : "-") + "\n" +
@@ -1396,7 +1404,29 @@ public class MainActivity extends Activity {
         ArrayList<Double> c=new ArrayList<>(), highs=new ArrayList<>(), lows=new ArrayList<>(), vols=new ArrayList<>();
         for(int i=0;i<k.length();i++){ JSONArray row=k.getJSONArray(i); highs.add(row.getDouble(2)); lows.add(row.getDouble(3)); c.add(row.getDouble(4)); vols.add(row.getDouble(5)); }
         double a=atr(highs,lows,c,14), sup=recentLow(lows,20), res=recentHigh(highs,20);
-        return new Quote(symbol.replace("USDT",""),format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res,true);
+        Quote quote = new Quote(symbol.replace("USDT",""),format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res,true);
+        double rate = getUsdtTryRate();
+        quote.tryPrice = rate > 0 ? price * rate : 0.0;
+        return quote;
+    }
+
+    private synchronized double getUsdtTryRate() {
+        long now = System.currentTimeMillis();
+        if (now - usdtTryRateUpdatedAt < AUTO_REFRESH_MS && usdtTryRateUpdatedAt > 0) return usdtTryRate;
+        usdtTryRateUpdatedAt = now;
+        try {
+            JSONObject root = getJson("https://query1.finance.yahoo.com/v8/finance/chart/USDTRY=X?interval=1d&range=1d");
+            JSONObject result = root.getJSONObject("chart").getJSONArray("result").getJSONObject(0);
+            double rate = result.getJSONObject("meta").optDouble("regularMarketPrice", 0.0);
+            if (rate > 0) usdtTryRate = rate;
+        } catch (Exception ignored) { }
+        return usdtTryRate;
+    }
+
+    private String estimatedTryPrice(Quote q) {
+        return q.tryPrice > 0
+                ? formatPortfolioPrice(q.tryPrice, false) + " TL (tahmini)"
+                : "kur verisi alınamadı";
     }
 
     private String num(double x, boolean coin) {
@@ -1566,9 +1596,9 @@ public class MainActivity extends Activity {
     private String pct(double x){return String.format(Locale.US,"%+.2f%%",x);}
 
     static class Quote {
-        String name,priceText,currency; boolean coin; double price,change,rsi,sma,macd,volumeRatio,atr,support,resistance;
-        Quote(String n,String p,double pr,double ch,double r,double s){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=0;volumeRatio=1;atr=0;support=0;resistance=0;coin=false;currency="TL";}
-        Quote(String n,String p,double pr,double ch,double r,double s,double m,double vr,double a,double sup,double res,boolean isCoin){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=m;volumeRatio=vr;atr=a;support=sup;resistance=res;coin=isCoin;currency=isCoin?"USDT":"TL";}
+        String name,priceText,currency; boolean coin; double price,change,rsi,sma,macd,volumeRatio,atr,support,resistance,tryPrice;
+        Quote(String n,String p,double pr,double ch,double r,double s){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=0;volumeRatio=1;atr=0;support=0;resistance=0;tryPrice=0;coin=false;currency="TL";}
+        Quote(String n,String p,double pr,double ch,double r,double s,double m,double vr,double a,double sup,double res,boolean isCoin){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=m;volumeRatio=vr;atr=a;support=sup;resistance=res;tryPrice=0;coin=isCoin;currency=isCoin?"USDT":"TL";}
     }
 
     static class Scan {
