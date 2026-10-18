@@ -588,11 +588,11 @@ public class MainActivity extends Activity {
             ArrayList<String> failedSymbols=new ArrayList<>();
             for(ScanResult r:stockResults) {
                 if(r.quote!=null) scans.add(new Scan(r.quote,score(r.quote)));
-                else { failed++; if(r.symbol!=null && !r.symbol.trim().isEmpty()) failedSymbols.add(r.symbol+" (BIST)"); }
+                else { failed++; if(r.symbol!=null && !r.symbol.trim().isEmpty()) failedSymbols.add(r.symbol+" (BIST: "+(r.error==null?"Bilinmeyen hata":r.error)+")"); }
             }
             for(ScanResult r:coinResults) {
                 if(r.quote!=null) scans.add(new Scan(r.quote,score(r.quote)));
-                else { failed++; if(r.symbol!=null && !r.symbol.trim().isEmpty()) failedSymbols.add(r.symbol+" (Coin)"); }
+                else { failed++; if(r.symbol!=null && !r.symbol.trim().isEmpty()) failedSymbols.add(r.symbol+" (Coin: "+(r.error==null?"Bilinmeyen hata":r.error)+")"); }
             }
             scans.sort((a,b)->Double.compare(b.score,a.score));
             recordSignalHistory(scans);
@@ -626,7 +626,7 @@ public class MainActivity extends Activity {
         for(int attempt=1;attempt<=RETRIES;attempt++) {
             try {
                 Quote q=coin ? fetchBinance(symbol) : fetchYahoo(symbol+".IS",symbol);
-                return new ScanResult(q,symbol);
+                return new ScanResult(q,symbol,null);
             } catch(Exception e) {
                 last=e;
                 if(attempt<RETRIES) {
@@ -637,7 +637,19 @@ public class MainActivity extends Activity {
                 }
             }
         }
-        return new ScanResult(null,symbol);
+        String reason="Veri alınamadı";
+        if(last!=null) {
+            String m=last.getMessage();
+            if(m!=null && m.toUpperCase(Locale.ROOT).contains("HTTP ")) {
+                int p=m.toUpperCase(Locale.ROOT).indexOf("HTTP ");
+                reason=m.substring(p,Math.min(m.length(),p+8)).trim();
+            } else if(last instanceof java.net.SocketTimeoutException) reason="Zaman aşımı";
+            else if(last instanceof java.net.UnknownHostException) reason="İnternet/DNS bağlantısı";
+            else if(last instanceof org.json.JSONException) reason="Veri yanıtı okunamadı";
+            else if(m!=null && !m.trim().isEmpty()) reason=m.length()>55?m.substring(0,55):m;
+            else reason=last.getClass().getSimpleName();
+        }
+        return new ScanResult(null,symbol,reason);
     }
 
     private void showQuotes(ArrayList<Quote> data, String type, int success, int attempted) {
@@ -1565,7 +1577,8 @@ public class MainActivity extends Activity {
     }
 
     static class ScanResult {
-        Quote quote; String symbol;
-        ScanResult(Quote q,String s){quote=q;symbol=s;}
+        Quote quote; String symbol; String error;
+        ScanResult(Quote q,String s){this(q,s,null);}
+        ScanResult(Quote q,String s,String e){quote=q;symbol=s;error=e;}
     }
 }
