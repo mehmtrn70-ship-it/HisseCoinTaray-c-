@@ -976,7 +976,8 @@ public class MainActivity extends Activity {
                     item.put("score", scan.score);
                     item.put("time", now);
                     item.put("allocationTL", VIRTUAL_TEST_PER_SIGNAL);
-                    item.put("quantity", VIRTUAL_TEST_PER_SIGNAL / scan.q.price);
+                    double testRate = scan.q.coin ? getUsdtTryRate() : 1.0;
+                    item.put("quantity", VIRTUAL_TEST_PER_SIGNAL / ((scan.q.coin && testRate > 0 ? testRate : 1.0) * scan.q.price));
                     item.put("currency", currencyFor(scan.q.coin));
                     created.put(item);
                 } catch (Exception ignored) { }
