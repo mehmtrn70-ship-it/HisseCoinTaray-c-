@@ -165,6 +165,11 @@ public class MainActivity extends Activity {
         toolsRow.addView(historyBtn, new LinearLayout.LayoutParams(0, -2, 1));
         toolsRow.addView(portfolioBtn, new LinearLayout.LayoutParams(0, -2, 1));
         root.addView(toolsRow);
+        Button virtualTestBtn = makeButton("📈 SANAL SİNYAL TESTİ • 10.000 TL");
+        LinearLayout.LayoutParams virtualTestParams = new LinearLayout.LayoutParams(-1, -2);
+        virtualTestParams.setMargins(0, 0, 0, dp(8));
+        root.addView(virtualTestBtn, virtualTestParams);
+        virtualTestBtn.setOnClickListener(v -> showVirtualSignalTest());
         LinearLayout alertRow = new LinearLayout(this);
         alertRow.setGravity(Gravity.CENTER);
         alertRow.addView(alertsBtn, new LinearLayout.LayoutParams(-1, -2));
@@ -935,7 +940,165 @@ public class MainActivity extends Activity {
             }
             while (history.length() > 360) history.remove(0);
             paperPrefs().edit().putString("signal_history", history.toString()).apply();
+            updateVirtualSignalTestPrices(scans);
         }
+    }
+
+    private static final double VIRTUAL_TEST_CAPITAL = 10000.0;
+    private static final double VIRTUAL_TEST_PER_SIGNAL = 2000.0;
+
+    private void showVirtualSignalTest() {
+        JSONArray test;
+        try { test = new JSONArray(paperPrefs().getString("virtual_signal_test", "[]")); }
+        catch (Exception e) { test = new JSONArray(); }
+        if (test.length() == 0) {
+            if (latestScans == null || latestScans.isEmpty()) {
+                new android.app.AlertDialog.Builder(this).setTitle("Sanal Sinyal Testi")
+                        .setMessage("Önce tam piyasa taraması yap. Test, en güçlü 5 farklı sinyali seçerek başlayacak.")
+                        .setPositiveButton("TAMAM", null).show();
+                return;
+            }
+            ArrayList<Scan> sorted = new ArrayList<>(latestScans);
+            sorted.sort((a, b) -> Double.compare(b.score, a.score));
+            HashSet<String> used = new HashSet<>();
+            JSONArray created = new JSONArray();
+            long now = System.currentTimeMillis();
+            for (Scan scan : sorted) {
+                if (scan == null || scan.q == null || scan.q.price <= 0) continue;
+                String key = (scan.q.coin ? "C:" : "S:") + scan.q.name;
+                if (!used.add(key)) continue;
+                JSONObject item = new JSONObject();
+                try {
+                    item.put("name", scan.q.name);
+                    item.put("coin", scan.q.coin);
+                    item.put("entry", scan.q.price);
+                    item.put("current", scan.q.price);
+                    item.put("score", scan.score);
+                    item.put("time", now);
+                    item.put("allocationTL", VIRTUAL_TEST_PER_SIGNAL);
+                    item.put("quantity", VIRTUAL_TEST_PER_SIGNAL / scan.q.price);
+                    item.put("currency", currencyFor(scan.q.coin));
+                    created.put(item);
+                } catch (Exception ignored) { }
+                if (created.length() >= 5) break;
+            }
+            if (created.length() == 0) {
+                new android.app.AlertDialog.Builder(this).setTitle("Sanal Sinyal Testi")
+                        .setMessage("Henüz kullanılabilir fiyatlı sinyal yok. Tekrar tarama yap.")
+                        .setPositiveButton("TAMAM", null).show();
+                return;
+            }
+            test = created;
+            paperPrefs().edit().putString("virtual_signal_test", test.toString()).apply();
+        }
+        renderVirtualSignalTest(test);
+    }
+
+    private void updateVirtualSignalTestPrices(ArrayList<Scan> scans) {
+        JSONArray test;
+        try { test = new JSONArray(paperPrefs().getString("virtual_signal_test", "[]")); }
+        catch (Exception e) { return; }
+        if (test.length() == 0 || scans == null) return;
+        boolean changed = false;
+        for (int i = 0; i < test.length(); i++) {
+            JSONObject item = test.optJSONObject(i);
+            if (item == null) continue;
+            String name = item.optString("name");
+            boolean coin = item.optBoolean("coin", false);
+            for (Scan scan : scans) {
+                if (scan != null && scan.q != null && name.equals(scan.q.name) && coin == scan.q.coin && scan.q.price > 0) {
+                    try { item.put("current", scan.q.price); item.put("lastUpdate", System.currentTimeMillis()); changed = true; }
+                    catch (Exception ignored) { }
+                    break;
+                }
+            }
+        }
+        if (changed) paperPrefs().edit().putString("virtual_signal_test", test.toString()).apply();
+    }
+
+    private void renderVirtualSignalTest(JSONArray test) {
+        StringBuilder report = new StringBuilder();
+        double totalPnlTL = 0, totalValueTL = 0, totalInvestedTL = 0;
+        int winners = 0, losers = 0;
+        long start = Long.MAX_VALUE;
+        for (int i = 0; i < test.length(); i++) {
+            JSONObject item = test.optJSONObject(i);
+            if (item == null) continue;
+            double entry = item.optDouble("entry", 0), current = item.optDouble("current", entry);
+            double qty = item.optDouble("quantity", 0), allocation = item.optDouble("allocationTL", VIRTUAL_TEST_PER_SIGNAL);
+            double pnlNative = (current - entry) * qty;
+            double pct = entry > 0 ? (current - entry) * 100.0 / entry : 0;
+            boolean coin = item.optBoolean("coin", false);
+            long time = item.optLong("time", 0);
+            if (time > 0) start = Math.min(start, time);
+            if (pnlNative > 0) winners++; else if (pnlNative < 0) losers++;
+            double pnlTL = coin ? pnlNative * getUsdtTryRate() : pnlNative;
+            totalPnlTL += pnlTL;
+            totalInvestedTL += allocation;
+            totalValueTL += allocation + pnlTL;
+            String entryStr = formatPortfolioPrice(entry, coin) + " " + currencyFor(coin);
+            String currentStr = formatPortfolioPrice(current, coin) + " " + currencyFor(coin);
+            report.append("\n").append(i + 1).append(". ").append(item.optString("name"))
+                    .append(" • Skor ").append(String.format(Locale.US, "%.0f", item.optDouble("score", 0)))
+                    .append("\n   Alış: ").append(entryStr).append(" | Güncel: ").append(currentStr)
+                    .append("\n   Değişim: ").append(String.format(Locale.US, "%+.2f%%", pct))
+                    .append(" | K/Z: ").append(String.format(Locale.US, "%+.2f", pnlNative)).append(" ").append(currencyFor(coin))
+                    .append("\n   1g / 3g / 7g: ").append(virtualTestHorizon(item, 1)).append(" / ")
+                    .append(virtualTestHorizon(item, 3)).append(" / ").append(virtualTestHorizon(item, 7)).append("\n");
+        }
+        if (start == Long.MAX_VALUE) start = System.currentTimeMillis();
+        long elapsed = Math.max(0, System.currentTimeMillis() - start);
+        String elapsedText = String.format(Locale.US, "%d gün %d saat", elapsed / 86400000L, (elapsed % 86400000L) / 3600000L);
+        String summary = "Başlangıç sermayesi: 10.000 TL\n"
+                + "Dağılım: Her sinyale 2.000 TL (en fazla 5 farklı varlık)\n"
+                + "Kayıtlı sinyal: " + test.length() + "/5\n"
+                + "Geçen süre: " + elapsedText + "\n"
+                + "Toplam K/Z: " + String.format(Locale.US, "%+.2f TL (yaklaşık)", totalPnlTL) + "\n"
+                + "Tahmini portföy değeri: " + String.format(Locale.US, "%.2f TL (yaklaşık)", totalValueTL) + "\n"
+                + "Kazanan / kaybeden: " + winners + " / " + losers
+                + "\n\n1g/3g/7g ölçümleri, yeterli sonraki fiyat kaydı oluşunca hesaplanır. Kripto TL karşılığı tahminidir; bu bir sanal testtir, gerçek emir gönderilmez.\n";
+        TextView content = new TextView(this);
+        content.setText(summary + report.toString());
+        content.setTextSize(14);
+        content.setPadding(24, 16, 24, 16);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(content);
+        new android.app.AlertDialog.Builder(this).setTitle("Sanal Sinyal Testi")
+                .setView(scroll)
+                .setPositiveButton("YENİ TEST BAŞLAT", (dialog, which) -> new android.app.AlertDialog.Builder(this)
+                        .setTitle("Yeni testi başlat?")
+                        .setMessage("Mevcut sanal sinyal testi sıfırlanıp güncel taramadaki en güçlü 5 farklı sinyalle yeniden başlatılacak. Sinyal geçmişi ve sanal portföy korunur.")
+                        .setPositiveButton("BAŞLAT", (d, w) -> {
+                            paperPrefs().edit().remove("virtual_signal_test").apply();
+                            showVirtualSignalTest();
+                        }).setNegativeButton("İPTAL", null).show())
+                .setNegativeButton("KAPAT", null).show();
+    }
+
+    private String virtualTestHorizon(JSONObject item, int days) {
+        long baseTime = item.optLong("time", 0);
+        double basePrice = item.optDouble("entry", 0);
+        if (baseTime <= 0 || basePrice <= 0) return "veri yok";
+        long target = days * 24L * 60L * 60L * 1000L;
+        long tolerance = 24L * 60L * 60L * 1000L;
+        JSONArray history;
+        try { history = new JSONArray(paperPrefs().getString("signal_history", "[]")); }
+        catch (Exception e) { return "bekleniyor"; }
+        JSONObject nearest = null;
+        long nearestDiff = Long.MAX_VALUE;
+        String name = item.optString("name");
+        boolean coin = item.optBoolean("coin", false);
+        for (int i = 0; i < history.length(); i++) {
+            JSONObject candidate = history.optJSONObject(i);
+            if (candidate == null || !name.equals(candidate.optString("name")) || coin != candidate.optBoolean("coin", false)) continue;
+            long elapsed = candidate.optLong("time", 0) - baseTime;
+            if (elapsed < target || elapsed > target + tolerance) continue;
+            long diff = elapsed - target;
+            if (candidate.optDouble("price", 0) > 0 && diff < nearestDiff) { nearest = candidate; nearestDiff = diff; }
+        }
+        if (nearest == null) return "bekleniyor";
+        double pct = (nearest.optDouble("price", 0) - basePrice) * 100.0 / basePrice;
+        return String.format(Locale.US, "%+.2f%%", pct);
     }
 
     private void showSignalHistory() {
