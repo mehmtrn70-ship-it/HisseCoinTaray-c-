@@ -1,5 +1,5 @@
 name: APK Build
-# Rebuild after stable signing secrets are configured.
+# Rebuild and verify stable signing secrets.
 
 on:
   push:
