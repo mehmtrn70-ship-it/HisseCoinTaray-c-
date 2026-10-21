@@ -1,5 +1,5 @@
 name: APK Build
-# Rebuild and verify stable signing secrets.
+# Require the persistent signing key; never publish a debug APK as an update.
 
 on:
   push:
@@ -20,6 +20,23 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Validate signing secrets
+        shell: bash
+        run: |
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Required repository secret is missing or empty: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Open Settings > Secrets and variables > Actions in this repository and verify the four exact secret names."
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/hissecoin-release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/hissecoin-release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+          echo "Signing secrets are present and the keystore can be opened."
       - name: Android SDK
         run: |
           SDKMANAGER=$(find /usr/local/lib/android/sdk -name sdkmanager -type f | head -1)
@@ -30,21 +47,14 @@ jobs:
         with:
           gradle-version: '9.7.1'
       - name: Configure stable signing key
-        if: env.ANDROID_KEYSTORE_BASE64 != ''
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/hissecoin-release.jks"
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/hissecoin-release.jks" >> "$GITHUB_ENV"
       - name: Build signed release APK
-        if: env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_ALIAS != '' && env.ANDROID_KEY_PASSWORD != ''
-        env:
-          ANDROID_KEYSTORE_PATH: ${{ env.ANDROID_KEYSTORE_PATH }}
         run: gradle assembleRelease --no-daemon --stacktrace
-      - name: Build debug APK (temporary fallback before signing secrets are configured)
-        if: env.ANDROID_KEYSTORE_BASE64 == '' || env.ANDROID_KEYSTORE_PASSWORD == '' || env.ANDROID_KEY_ALIAS == '' || env.ANDROID_KEY_PASSWORD == ''
-        run: gradle assembleDebug --no-daemon --stacktrace
-      - name: Upload APK
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: HisseCoinTarayici-v${{ github.run_number }}-APK
-          path: app/build/outputs/apk/**/*.apk
+          name: HisseCoinTarayici-v${{ github.run_number }}-signed-APK
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
