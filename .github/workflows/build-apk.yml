@@ -1,5 +1,6 @@
 name: APK Build
 # Require the persistent signing key; never publish a debug APK as an update.
+# Retry after the user re-saved the repository secrets.
 
 on:
   push:
