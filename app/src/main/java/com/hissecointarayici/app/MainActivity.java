@@ -1130,7 +1130,13 @@ public class MainActivity extends Activity {
             long diff = elapsed - target;
             if (candidate.optDouble("price", 0) > 0 && diff < nearestDiff) { nearest = candidate; nearestDiff = diff; }
         }
-        if (nearest == null) return "bekleniyor";
+        if (nearest == null) {
+            long elapsedNow = System.currentTimeMillis() - baseTime;
+            // Do not leave a missed measurement window showing "waiting" forever.
+            // Historical prices cannot be reconstructed if no snapshot was recorded.
+            if (elapsedNow > target + tolerance) return "ölçüm penceresi kaçtı";
+            return "bekleniyor";
+        }
         double pct = (nearest.optDouble("price", 0) - basePrice) * 100.0 / basePrice;
         return String.format(Locale.US, "%+.2f%%", pct);
     }
