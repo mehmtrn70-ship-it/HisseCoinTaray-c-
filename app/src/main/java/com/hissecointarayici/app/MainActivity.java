@@ -761,6 +761,8 @@ public class MainActivity extends Activity {
                         }
                         merged.sort((a,b)->Double.compare(b.score,a.score));
                         updatePaperPositionPrices(merged);
+                        // Keep the virtual signal test in sync with the same 60-second top-signal refresh.
+                        updateVirtualSignalTestPrices(merged);
                         showScans(merged, merged.size(), 0, merged.size(), "");
                         String time = new java.text.SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
                         status.setText("İlk 18 güçlü sinyal yenilendi • " + time + " • " + updated.size() + "/" + snapshot.size() + " başarılı • " + universeLabel);
