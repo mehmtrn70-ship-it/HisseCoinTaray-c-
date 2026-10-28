@@ -983,6 +983,7 @@ public class MainActivity extends Activity {
                     item.put("entryVolumeRatio", scan.q.volumeRatio);
                     item.put("entryResistance", scan.q.resistance);
                     item.put("time", now);
+                    item.put("horizonCaptureVersion", 1);
                     item.put("allocationTL", VIRTUAL_TEST_PER_SIGNAL);
                     double testRate = scan.q.coin ? getUsdtTryRate() : 1.0;
                     item.put("quantity", VIRTUAL_TEST_PER_SIGNAL / ((scan.q.coin && testRate > 0 ? testRate : 1.0) * scan.q.price));
@@ -1014,6 +1015,9 @@ public class MainActivity extends Activity {
         for (int i = 0; i < test.length(); i++) {
             JSONObject item = test.optJSONObject(i);
             if (item == null) continue;
+            // Only new-format tests use the robust horizon capture; never backfill old tests
+            // with today's price, which would falsely imply a historical measurement.
+            if (item.optInt("horizonCaptureVersion", 0) < 1) continue;
             String name = item.optString("name");
             boolean coin = item.optBoolean("coin", false);
             for (Scan scan : scans) {
@@ -1022,15 +1026,15 @@ public class MainActivity extends Activity {
                     item.put("current", scan.q.price);
                     item.put("lastUpdate", now);
                     long baseTime = item.optLong("time", 0);
-                    // Save each horizon directly on the test item. This avoids losing 1d/3d/7d
-                    // measurements when the bounded signal_history array rolls over.
                     if (baseTime > 0) {
                         long elapsed = now - baseTime;
                         for (int days : new int[]{1, 3, 7}) {
                             String priceKey = "horizon" + days + "Price";
                             String timeKey = "horizon" + days + "Time";
                             long target = days * day;
-                            if (!item.has(priceKey) && elapsed >= target && elapsed <= target + day) {
+                            // Capture the first available real price at or after each target.
+                            // Do not impose a narrow window that can be missed between scans.
+                            if (!item.has(priceKey) && elapsed >= target) {
                                 item.put(priceKey, scan.q.price);
                                 item.put(timeKey, now);
                             }
@@ -1095,9 +1099,15 @@ public class MainActivity extends Activity {
                 .setView(scroll)
                 .setPositiveButton("YENİ TEST BAŞLAT", (dialog, which) -> new android.app.AlertDialog.Builder(this)
                         .setTitle("Yeni testi başlat?")
-                        .setMessage("Mevcut sanal sinyal testi sıfırlanıp güncel taramadaki en güçlü 5 farklı sinyalle yeniden başlatılacak. Sinyal geçmişi ve sanal portföy korunur.")
+                        .setMessage("Mevcut test arşivlenecek ve güncel taramadaki en güçlü 5 farklı sinyalle yeni test başlatılacak. Eski testin özeti korunur; sinyal geçmişi ve sanal portföy silinmez.")
                         .setPositiveButton("BAŞLAT", (d, w) -> {
-                            paperPrefs().edit().remove("virtual_signal_test").apply();
+                            try {
+                                String oldTest = paperPrefs().getString("virtual_signal_test", "[]");
+                                paperPrefs().edit()
+                                        .putString("virtual_signal_test_archive", oldTest)
+                                        .remove("virtual_signal_test")
+                                        .apply();
+                            } catch (Exception ignored) { }
                             showVirtualSignalTest();
                         }).setNegativeButton("İPTAL", null).show())
                 .setNegativeButton("KAPAT", null).show();
@@ -1111,7 +1121,15 @@ public class MainActivity extends Activity {
         double savedPrice = item.optDouble(savedPriceKey, 0);
         if (savedPrice > 0) {
             double savedPct = (savedPrice - basePrice) * 100.0 / basePrice;
-            return String.format(Locale.US, "%+.2f%%", savedPct);
+            long observedAt = item.optLong("horizon" + days + "Time", 0);
+            String timing = "";
+            if (observedAt > baseTime) {
+                long actualElapsed = observedAt - baseTime;
+                long actualDays = actualElapsed / (24L * 60L * 60L * 1000L);
+                long actualHours = (actualElapsed % (24L * 60L * 60L * 1000L)) / (60L * 60L * 1000L);
+                timing = " (" + actualDays + "g " + actualHours + "sa)";
+            }
+            return String.format(Locale.US, "%+.2f%%", savedPct) + timing;
         }
         long target = days * 24L * 60L * 60L * 1000L;
         long tolerance = 24L * 60L * 60L * 1000L;
