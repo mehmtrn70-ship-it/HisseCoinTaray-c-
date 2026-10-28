@@ -1001,17 +1001,36 @@ public class MainActivity extends Activity {
         catch (Exception e) { return; }
         if (test.length() == 0 || scans == null) return;
         boolean changed = false;
+        long now = System.currentTimeMillis();
+        long day = 24L * 60L * 60L * 1000L;
         for (int i = 0; i < test.length(); i++) {
             JSONObject item = test.optJSONObject(i);
             if (item == null) continue;
             String name = item.optString("name");
             boolean coin = item.optBoolean("coin", false);
             for (Scan scan : scans) {
-                if (scan != null && scan.q != null && name.equals(scan.q.name) && coin == scan.q.coin && scan.q.price > 0) {
-                    try { item.put("current", scan.q.price); item.put("lastUpdate", System.currentTimeMillis()); changed = true; }
-                    catch (Exception ignored) { }
-                    break;
-                }
+                if (scan == null || scan.q == null || !name.equals(scan.q.name) || coin != scan.q.coin || scan.q.price <= 0) continue;
+                try {
+                    item.put("current", scan.q.price);
+                    item.put("lastUpdate", now);
+                    long baseTime = item.optLong("time", 0);
+                    // Save each horizon directly on the test item. This avoids losing 1d/3d/7d
+                    // measurements when the bounded signal_history array rolls over.
+                    if (baseTime > 0) {
+                        long elapsed = now - baseTime;
+                        for (int days : new int[]{1, 3, 7}) {
+                            String priceKey = "horizon" + days + "Price";
+                            String timeKey = "horizon" + days + "Time";
+                            long target = days * day;
+                            if (!item.has(priceKey) && elapsed >= target && elapsed <= target + day) {
+                                item.put(priceKey, scan.q.price);
+                                item.put(timeKey, now);
+                            }
+                        }
+                    }
+                    changed = true;
+                } catch (Exception ignored) { }
+                break;
             }
         }
         if (changed) paperPrefs().edit().putString("virtual_signal_test", test.toString()).apply();
@@ -1080,6 +1099,12 @@ public class MainActivity extends Activity {
         long baseTime = item.optLong("time", 0);
         double basePrice = item.optDouble("entry", 0);
         if (baseTime <= 0 || basePrice <= 0) return "veri yok";
+        String savedPriceKey = "horizon" + days + "Price";
+        double savedPrice = item.optDouble(savedPriceKey, 0);
+        if (savedPrice > 0) {
+            double savedPct = (savedPrice - basePrice) * 100.0 / basePrice;
+            return String.format(Locale.US, "%+.2f%%", savedPct);
+        }
         long target = days * 24L * 60L * 60L * 1000L;
         long tolerance = 24L * 60L * 60L * 1000L;
         JSONArray history;
