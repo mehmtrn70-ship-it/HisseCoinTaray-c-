@@ -974,6 +974,14 @@ public class MainActivity extends Activity {
                     item.put("entry", scan.q.price);
                     item.put("current", scan.q.price);
                     item.put("score", scan.score);
+                    // Preserve the indicator snapshot that produced the entry score so later
+                    // reviews can explain why a high-scoring signal subsequently fell.
+                    item.put("entryChange24h", scan.q.change);
+                    item.put("entryRsi", scan.q.rsi);
+                    item.put("entrySma", scan.q.sma);
+                    item.put("entryMacd", scan.q.macd);
+                    item.put("entryVolumeRatio", scan.q.volumeRatio);
+                    item.put("entryResistance", scan.q.resistance);
                     item.put("time", now);
                     item.put("allocationTL", VIRTUAL_TEST_PER_SIGNAL);
                     double testRate = scan.q.coin ? getUsdtTryRate() : 1.0;
