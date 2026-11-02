@@ -161,10 +161,16 @@ public class MainActivity extends Activity {
         toolsRow.setPadding(0, 0, 0, 8);
         Button historyBtn = makeButton("SİNYAL GEÇMİŞİ");
         Button portfolioBtn = makeButton("SANAL PORTFÖY");
+        Button earlyBtn = makeButton("ERKEN FIRSAT AVCISI");
         Button alertsBtn = makeButton("SİNYAL BİLDİRİMİ");
         toolsRow.addView(historyBtn, new LinearLayout.LayoutParams(0, -2, 1));
         toolsRow.addView(portfolioBtn, new LinearLayout.LayoutParams(0, -2, 1));
         root.addView(toolsRow);
+        Button earlyOpportunityBtn = makeButton("🚀 ERKEN FIRSAT AVCISI");
+        LinearLayout.LayoutParams earlyParams = new LinearLayout.LayoutParams(-1, -2);
+        earlyParams.setMargins(0, 0, 0, dp(8));
+        root.addView(earlyOpportunityBtn, earlyParams);
+        earlyOpportunityBtn.setOnClickListener(v -> startActivity(new Intent(this, EarlyOpportunityActivity.class)));
         Button virtualTestBtn = makeButton("📈 SANAL SİNYAL TESTİ • 10.000 TL");
         LinearLayout.LayoutParams virtualTestParams = new LinearLayout.LayoutParams(-1, -2);
         virtualTestParams.setMargins(0, 0, 0, dp(8));
