@@ -59,9 +59,11 @@ public class EarlyOpportunityActivity extends Activity {
                     String symbol=t.optString("symbol");
                     double change=t.optDouble("priceChangePercent",0);
                     double quoteVol=t.optDouble("quoteVolume",0);
-                    if(symbol.endsWith("USDT") && !symbol.contains("UP") && !symbol.contains("DOWN")
+                    String base = symbol.endsWith("USDT") ? symbol.substring(0, symbol.length()-4) : "";
+                    if(symbol.endsWith("USDT") && !isStableBase(base) && !isMetalBase(base)
+                        && !symbol.contains("UP") && !symbol.contains("DOWN")
                         && !symbol.contains("BULL") && !symbol.contains("BEAR")
-                        && quoteVol>0 && change<=10.0) ranked.add(t);
+                        && quoteVol>0 && change<=10.0 && Math.abs(change)>=1.0) ranked.add(t);
                 }
                 ranked.sort((a,b)->Double.compare(b.optDouble("quoteVolume",0),a.optDouble("quoteVolume",0)));
                 int count=Math.min(60,ranked.size());
@@ -90,6 +92,17 @@ public class EarlyOpportunityActivity extends Activity {
                 runOnUiThread(() -> { status.setText("Veri alınamadı: "+safe(e.getMessage())); running=false; });
             }
         });
+    }
+
+    // Stablecoins are excluded from directional opportunity rankings.
+    private boolean isStableBase(String b) {
+        return Arrays.asList("USDT","USDC","BUSD","FDUSD","TUSD","USDP","DAI","USDE",
+            "USDS","USDD","USTC","FRAX","PYUSD","EUR","EURI","AEUR","RLUSD","USD1",
+            "USDJ","USDX","GUSD","LUSD","SUSD","USDG","RWUSD").contains(b);
+    }
+    // Gold-backed tokens are not mixed with crypto momentum candidates.
+    private boolean isMetalBase(String b) {
+        return Arrays.asList("XAUT","PAXG").contains(b);
     }
 
     private Candidate analyze(JSONObject ticker) throws Exception {
