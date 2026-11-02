@@ -107,9 +107,9 @@ public class EarlyOpportunityActivity extends Activity {
         double volumeScore=clamp((Math.min(vol15,4)-1)/3*25,0,25);
         double breakoutScore=breakout>=1?25:clamp((breakout-0.975)/0.025*25,0,25);
         double momentumScore=0;
-        momentumScore+=rsiScore(rsi15)*10;
-        momentumScore+=rsiScore(rsi1h)*10;
-        double macdScore=(macd15>0?5:0)+(macd1h>0?5:0);
+        momentumScore+=rsiScore(rsi15)*15;
+        momentumScore+=rsiScore(rsi1h)*15;
+        double macdScore=(macd15>0?10:0)+(macd1h>0?10:0);
         double score=volumeScore+breakoutScore+momentumScore+macdScore;
         // Do not promote an already overheated short-term move.
         if(rsi15>78 || rsi1h>78) score-=10;
