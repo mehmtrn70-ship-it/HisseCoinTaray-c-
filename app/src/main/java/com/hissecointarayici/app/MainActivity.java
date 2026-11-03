@@ -906,6 +906,9 @@ public class MainActivity extends Activity {
                 "Momentum: " + momentum + "\n" +
                 "MACD: " + String.format(Locale.US,"%.4f",s.q.macd) + "\n" +
                 "Hacim gücü: " + String.format(Locale.US,"%.2fx",s.q.volumeRatio) + "\n\n" +
+                "PUANIN DÖKÜMÜ (mevcut formül)\n" + scoreBreakdownText(s.q) + "\n\n" +
+                "TEKNİK TEYİT\n" + technicalConfirmationText(s.q) + "\n\n" +
+                "Mevcut skor formülü değiştirilmemiştir.\n\n" +
                 "Neden bu skor?\n" + reasonText(s.q) +
                 "\n\n" + planText(s.q) +
                 "\n\nNot: Bu analiz teknik göstergelere dayanır ve yatırım tavsiyesi değildir.";
@@ -1704,6 +1707,42 @@ public class MainActivity extends Activity {
                 "Durum: "+condition+"\\n\\n"+
                 "Hesaplama; destek/direnç, ATR14 ve mevcut fiyat kullanılarak dinamik yapılır.\\n"+
                 "Bu bölüm teknik senaryodur, yatırım tavsiyesi değildir.";
+    }
+
+    private String scoreBreakdownText(Quote q) {
+        double changePts = q.change>8?12:q.change>3?9:q.change>0?5:q.change< -8?-12:q.change< -3?-9:q.change<0?-5:0;
+        double rsiPts = q.rsi>=52&&q.rsi<=65?8:q.rsi>72?-10:q.rsi>=68?-4:q.rsi<30?3:q.rsi<42?-3:0;
+        double smaPts = q.sma>0?(q.price>q.sma?8:-8):0;
+        double macdPct = q.price>0?(q.macd/q.price)*100.0:0;
+        double macdPts = macdPct>0.25?6:macdPct>0.05?3:macdPct< -0.25?-6:macdPct< -0.05?-3:0;
+        double volumePts = q.volumeRatio>=2?6:q.volumeRatio>=1.3?4:q.volumeRatio<0.5?-5:0;
+        double resistancePts = q.resistance>0&&q.price>q.resistance?4:0;
+        double raw=50+changePts+rsiPts+smaPts+macdPts+volumePts+resistancePts;
+        double finalScore=Math.max(10,Math.min(95,raw));
+        return "Başlangıç: 50\n24s değişim ("+pct(q.change)+"): "+signedPoints(changePts)+"\n"+
+                "RSI(14) ("+String.format(Locale.US,"%.1f",q.rsi)+"): "+signedPoints(rsiPts)+"\n"+
+                "SMA20 ("+(q.sma>0?(q.price>q.sma?"fiyat üstünde":"fiyat altında"):"veri yok")+"): "+signedPoints(smaPts)+"\n"+
+                "MACD ("+String.format(Locale.US,"%.4f",q.macd)+"): "+signedPoints(macdPts)+"\n"+
+                "Hacim oranı ("+String.format(Locale.US,"%.2fx",q.volumeRatio)+"): "+signedPoints(volumePts)+"\n"+
+                "Direnç kırılımı: "+signedPoints(resistancePts)+"\nHam toplam: "+String.format(Locale.US,"%.0f",raw)+"\n"+
+                "Sınırlandırılmış skor: "+String.format(Locale.US,"%.0f",finalScore)+"/100";
+    }
+
+    private String signedPoints(double points) {
+        return (points>0?"+":"")+String.format(Locale.US,"%.0f",points)+" puan";
+    }
+
+    private String technicalConfirmationText(Quote q) {
+        int positive=0, negative=0, available=0;
+        if(q.change!=0){available++;if(q.change>0)positive++;else negative++;}
+        if(q.rsi>0){available++;if(q.rsi>=52&&q.rsi<=65)positive++;else if(q.rsi>72||q.rsi<42)negative++;}
+        if(q.sma>0){available++;if(q.price>q.sma)positive++;else negative++;}
+        if(q.macd!=0){available++;if(q.macd>0)positive++;else negative++;}
+        if(q.volumeRatio>0){available++;if(q.volumeRatio>=1.3)positive++;else if(q.volumeRatio<0.5)negative++;}
+        if(q.resistance>0){available++;if(q.price>q.resistance)positive++;}
+        String level=available<3?"Veri yetersiz":positive>=4&&positive>negative?"Güçlü":positive>=2&&positive>negative?"Orta":"Zayıf";
+        return level+" teyit • Olumlu koşul: "+positive+" • Olumsuz koşul: "+negative+" • Değerlendirilen: "+available+"\n"+
+                "Not: Bu sınıflandırma mevcut göstergelerin yön uyumudur; geçmiş başarı olasılığı değildir.";
     }
 
     private double score(Quote q) {
