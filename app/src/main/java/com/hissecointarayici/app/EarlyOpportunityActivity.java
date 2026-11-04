@@ -68,6 +68,7 @@ public class EarlyOpportunityActivity extends Activity {
                     JSONObject t=tickers.getJSONObject(i);
                     String symbol=t.optString("symbol");
                     double change=t.optDouble("priceChangePercent",0);
+                    if(symbol.endsWith("USDT")) livePrices.put(symbol,t.optDouble("lastPrice",0));
                     double quoteVol=t.optDouble("quoteVolume",0);
                     String base = symbol.endsWith("USDT") ? symbol.substring(0, symbol.length()-4) : "";
                     if(symbol.endsWith("USDT") && !isStableBase(base) && !isMetalBase(base)
@@ -75,7 +76,6 @@ public class EarlyOpportunityActivity extends Activity {
                         && !symbol.contains("BULL") && !symbol.contains("BEAR")
                         && quoteVol>0 && change<=10.0 && change>=-20.0) {
                         ranked.add(t);
-                        livePrices.put(symbol,t.optDouble("lastPrice",0));
                     }
                 }
                 updateTrackedRecords(livePrices);
