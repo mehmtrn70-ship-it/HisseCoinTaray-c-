@@ -35,7 +35,7 @@ public class EarlyOpportunityActivity extends Activity {
         title.setTextColor(Color.rgb(25,35,50)); title.setGravity(Gravity.CENTER);
         root.addView(title);
         TextView info = new TextView(this);
-        info.setText("Binance USDT • 15 dk + 1 saat • İlk 60 yüksek hacimli parite");
+        info.setText("Binance USDT • 15 dk + 1 saat • İlk 200 yüksek hacimli parite");
         info.setTextColor(Color.DKGRAY); info.setPadding(0,8,0,8);
         root.addView(info);
         historyStatus = new TextView(this);
@@ -80,7 +80,7 @@ public class EarlyOpportunityActivity extends Activity {
                 }
                 updateTrackedRecords(livePrices);
                 ranked.sort((a,b)->Double.compare(b.optDouble("quoteVolume",0),a.optDouble("quoteVolume",0)));
-                int count=Math.min(60,ranked.size());
+                int count=Math.min(200,ranked.size());
                 ArrayList<Future<Candidate>> futures=new ArrayList<>();
                 for(int i=0;i<count;i++) {
                     final JSONObject t=ranked.get(i);
