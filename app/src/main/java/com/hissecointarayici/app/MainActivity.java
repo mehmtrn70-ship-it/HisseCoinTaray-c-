@@ -170,6 +170,13 @@ public class MainActivity extends Activity {
         virtualTestParams.setMargins(0, 0, 0, dp(8));
         root.addView(virtualTestBtn, virtualTestParams);
         virtualTestBtn.setOnClickListener(v -> showVirtualSignalTest());
+
+        Button earlyOpportunityBtn = makeButton("🚀 ERKEN FIRSAT AVCISI • 300 PARİTE");
+        LinearLayout.LayoutParams earlyOpportunityParams = new LinearLayout.LayoutParams(-1, -2);
+        earlyOpportunityParams.setMargins(0, 0, 0, dp(8));
+        root.addView(earlyOpportunityBtn, earlyOpportunityParams);
+        earlyOpportunityBtn.setOnClickListener(v -> startActivity(new Intent(this, EarlyOpportunityActivity.class)));
+
         LinearLayout alertRow = new LinearLayout(this);
         alertRow.setGravity(Gravity.CENTER);
         alertRow.addView(alertsBtn, new LinearLayout.LayoutParams(-1, -2));
