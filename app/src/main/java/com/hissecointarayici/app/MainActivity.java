@@ -1074,6 +1074,40 @@ public class MainActivity extends Activity {
             test = created;
             paperPrefs().edit().putString("virtual_signal_test", test.toString()).apply();
         }
+        // Existing tests also need an asynchronous FX preflight. Never fetch FX from render/UI code.
+        boolean testHasCrypto = false;
+        for (int i = 0; i < test.length(); i++) {
+            JSONObject item = test.optJSONObject(i);
+            if (item != null && item.optBoolean("coin", false)) { testHasCrypto = true; break; }
+        }
+        if (testHasCrypto && usdtTryRate <= 0) {
+            if (checkingUsdtTryRate) return;
+            checkingUsdtTryRate = true;
+            android.app.ProgressDialog progress = new android.app.ProgressDialog(this);
+            progress.setMessage("USDT/TL kuru arka planda kontrol ediliyor...");
+            progress.setCancelable(false);
+            progress.show();
+            final JSONArray testToRender = test;
+            refreshPool.execute(() -> {
+                double rate = getUsdtTryRate();
+                runOnUiThread(() -> {
+                    checkingUsdtTryRate = false;
+                    if (isFinishing()) { if (progress.isShowing()) progress.dismiss(); return; }
+                    if (progress.isShowing()) progress.dismiss();
+                    if (rate > 0) {
+                        renderVirtualSignalTest(testToRender);
+                    } else {
+                        String detail = lastUsdtTryRateError == null || lastUsdtTryRateError.isEmpty()
+                                ? "Kur servislerinden geçerli yanıt alınamadı."
+                                : lastUsdtTryRateError;
+                        new android.app.AlertDialog.Builder(this).setTitle("Kur verisi alınamadı")
+                                .setMessage("Mevcut test korunuyor. Arka plan kur isteği başarısız: " + detail)
+                                .setPositiveButton("TAMAM", null).show();
+                    }
+                });
+            });
+            return;
+        }
         renderVirtualSignalTest(test);
     }
 
@@ -1144,7 +1178,8 @@ public class MainActivity extends Activity {
             long time = item.optLong("time", 0);
             if (time > 0) start = Math.min(start, time);
             if (pnlNative > 0) winners++; else if (pnlNative < 0) losers++;
-            double fxRate = coin ? getUsdtTryRate() : 1.0;
+            // Rendering is UI-thread work: use only the last asynchronously fetched FX value.
+            double fxRate = coin ? usdtTryRate : 1.0;
             if (coin && fxRate <= 0) {
                 missingCryptoRate = true;
             } else {
