@@ -1130,18 +1130,23 @@ public class MainActivity extends Activity {
         String elapsedText = String.format(Locale.US, "%d gün %d saat", elapsed / 86400000L, (elapsed % 86400000L) / 3600000L);
         String pnlSummary = missingCryptoRate ? "kur verisi yok — hesaplanamadı" : String.format(Locale.US, "%+.2f TL (yaklaşık)", totalPnlTL);
         String valueSummary = missingCryptoRate ? "kur verisi yok — hesaplanamadı" : String.format(Locale.US, "%.2f TL (yaklaşık)", totalValueTL);
-        String summary = "Başlangıç sermayesi: 10.000 TL\\n"
-                + "Dağılım: Her sinyale 2.000 TL (en fazla 5 farklı varlık)\\n"
-                + "Kayıtlı sinyal: " + test.length() + "/5\\n"
-                + "Geçen süre: " + elapsedText + "\\n"
-                + "Toplam K/Z: " + pnlSummary + "\\n"
-                + "Tahmini portföy değeri: " + valueSummary + "\\n"                + "Kazanan / kaybeden: " + winners + " / " + losers
+        String summary = "Başlangıç sermayesi: 10.000 TL\n"
+                + "Dağılım: Her sinyale 2.000 TL (en fazla 5 farklı varlık)\n"
+                + "Kayıtlı sinyal: " + test.length() + "/5\n"
+                + "Geçen süre: " + elapsedText + "\n"
+                + "Toplam K/Z: " + pnlSummary + "\n"
+                + "Tahmini portföy değeri: " + valueSummary + "\n"
+                + "Kazanan / kaybeden: " + winners + " / " + losers
                 + "\n\n1g/3g/7g ölçümleri, yeterli sonraki fiyat kaydı oluşunca hesaplanır. Kripto TL karşılığı tahminidir; bu bir sanal testtir, gerçek emir gönderilmez.\n";
         TextView content = new TextView(this);
         content.setText(summary + report.toString());
         content.setTextSize(14);
         content.setPadding(24, 16, 24, 16);
         ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
+        scroll.setVerticalScrollBarEnabled(true);
+        int dialogMaxHeight = Math.min(dp(520), (int)(getResources().getDisplayMetrics().heightPixels * 0.58f));
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(-1, dialogMaxHeight));
         scroll.addView(content);
         new android.app.AlertDialog.Builder(this).setTitle("Sanal Sinyal Testi")
                 .setView(scroll)
