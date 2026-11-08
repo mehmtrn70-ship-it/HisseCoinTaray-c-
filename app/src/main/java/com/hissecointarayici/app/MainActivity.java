@@ -1056,7 +1056,7 @@ public class MainActivity extends Activity {
                     item.put("entryVolumeRatio", scan.q.volumeRatio);
                     item.put("entryResistance", scan.q.resistance);
                     item.put("time", now);
-                    item.put("horizonCaptureVersion", 1);
+                    item.put("horizonCaptureVersion", 2);
                     item.put("allocationTL", VIRTUAL_TEST_PER_SIGNAL);
                     double testRate = scan.q.coin ? getUsdtTryRate() : 1.0;
                     item.put("quantity", VIRTUAL_TEST_PER_SIGNAL / ((scan.q.coin && testRate > 0 ? testRate : 1.0) * scan.q.price));
@@ -1135,7 +1135,10 @@ public class MainActivity extends Activity {
                     long baseTime = item.optLong("time", 0);
                     if (baseTime > 0) {
                         long elapsed = now - baseTime;
-                        long tolerance = 60L * 60L * 1000L;
+                        // Allow the first fresh quote up to 6 hours after the target.
+                        // Store its actual timestamp and display the real elapsed time.
+                        // Never rewrite an existing historical checkpoint.
+                        long tolerance = 6L * 60L * 60L * 1000L;
                         for (int days : new int[]{1, 3, 7}) {
                             String priceKey = "horizon" + days + "Price";
                             String timeKey = "horizon" + days + "Time";
