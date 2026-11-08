@@ -56,6 +56,8 @@ public class MainActivity extends Activity {
     // USDT'nin TL karşılığı yaklaşık USD/TRY kuru ile hesaplanır; bu bir borsa TRY fiyatı değildir.
     private volatile double usdtTryRate = 0.0;
     private volatile long usdtTryRateUpdatedAt = 0L;
+    private volatile boolean checkingUsdtTryRate = false;
+    private volatile String lastUsdtTryRateError = "";
 
     private static final String[] BIST100 = ("ASELS,TUPRS,BIMAS,THYAO,AKBNK,EREGL,YKBNK,KCHOL,ISCTR,SAHOL,TCELL,ASTOR,GARAN,CCOLA,ENKAI,SISE,TAVHL,FROTO,MGROS,SASA,TRALT,EKGYO,AEFES,MPARK,TOASO,KRDMD,PGSUS,GUBRF,HALKB,ENERY,ENJSA,TURSG,PETKM,TTKOM,GLYHO,AGHOL,TRMET,MAVI,TKFEN,VAKBN,TRGYO,OYAKC,AHGAZ,BRSAN,AKSEN,TABGD,DOHOL,ANSGR,SOKM,RGYAS,AYGAZ,ALARK,CIMSA,RYSAS,ULKER,AKSA,ISMEN,DOAS,CVKMD,OTKAR,GLRMK,TSKB,ARCLK,HEKTS,TTRAK,ISDMR,TRENJ,ALBRK,ECILC,CANTE,CWENE,ANHYT,TCKRC,BTCIM,AKFYE,SNGYO,GRSEL,ODAS,BRYAT,EGEEN,ECZYT,BERA,FENER,KCAER,ALTNY,EGGUB,LMKDC,PAHOL,ENTRA,ZOREN,OBAMS,GWIND,KARSN,KORDS,EUREN,BINHO,VESTL,KATMR,AKCNS,ALFAS").split(",");
     private static final String[] BIST_EXTRA = ("AKENR,AKFGY,AKSGY,AKYHO,ATATP,ATLAS,AVHOL,AVOD,AYDEM,AYEN,BAKAB,BANVT,BASGZ,BAYRK,BEGYO,BIGCH,BIOEN,BJKAS,BLCYT,BMSCH,BNTAS,BORLS,BRISA,BRKO,BRKSN,BRKVY,BRLSM,BRSAN,BSOKE,BUCIM,BULGS,BURCE,BURVA,CEMAS,CEMTS,CEOEM,COSMO,CRDFA,CUSAN,DAGI,TRHOL,DAPGM,DARDL,DCTTR,DERHL,DERIM,DESA,DESPC,DEVA,DITAS,DMSAS,DOBUR,DURDO,DYOBY,EDATA,EDIP,EFORC,EGPRO,EGSER,EKIZ,ELITE,EMKEL,EMNIS,ENDAE,ENSRI,ERBOS,ERCB,ERSU,ESCAR,ESCOM,ESEN,ETILR,EUPWR,EYGYO,FADE,FONET,FORMT,FORTE,FRIGO, GEDIK,GENTS,GEREL,GLBMD,GLCVY,GOODY,GRNYO,GSDDE,GSDHO,GTYGR,GUNDG,HATEK,HATSN,HDFGS,HEDEF,HKTM,HRKET,IDGYO,IEYHO,IHAAS,IHEVA,IHGZT,IHYAY,IMASM,INDES,INFO,INGRM,INTEM,INVEO,ISBIR,ISBTR,ISFIN,ISKPL,ISKUR,ISSEN,IZENR,IZFAS,IZINV,IZMDC,JANTS,KAPLM,KAREL,KARTN,KATMR,KAYSE,KENT,KERVN,KFEIN,KIMMR,KLGYO,KLKIM,KLMSN,KLNMA,KLRHO,KLSER,KLSYN,KMPUR,KNFRT,KONKA,KONTR,KONYA,KOPOL,KOTON,KRDMA,KRDMB,KRGYO,KRVGD,KSTUR,KUTPO,KUVVA,KZBGY,LIDER,LILAK,LKMNH,LOGO,LUKSK,MAALT,MACKO,MAKIM,MANAS,MARKA,MARTI,MATAS,MEDTR,MEGAP,MEGMT,MERCN,METRO,METUR,MHRGY,MIPAZ,MMCAS,MNDRS,MNDTR,MOBTL,MRGYO,MRSHL,MSGYO,MTRKS,MZHLD,NATEN,NETAS,NIBAS,NTGAZ,NUHCM,OBAMS,OBASE,ONCSM,ORGE,ORMA,OSMEN,OSTIM,OTTO,OYLUM,OZATD,OZGYO,OZKGY,OZRDN,OZSUB,OZYSR,PAGYO,PAMEL,PAPIL,PARSN,PASEU,PCILT,PEKGY,PENGD,PENTA,PETUN,PINSU,PKART,PKENT,PLTUR,PNLSN,PNSUT,POLHO,POLTK,PRDGS,PRKAB,PRKME,PRZMA,PSDTC,QNBFK,QNBTR,RALYH,RAYSG,REEDR,REKOR,RGYAS,RODRG,RTALB,RUBNS,RUZYE,RYGYO,SAMAT,SANEL,SANFM,SANKO,SARKY,SAYAS,SDTTR,SEGMN,SEKFK,SEKUR,SELEC,SELGD,SELVA,SERNT,SEYKM,SILVR,SKBNK,SKTAS,SMART,SMRTG,SMRVA,SNGYO,SNICA,SNPAM,SODSN,SONME,SRVGY,SUNTK,SURGY,SUWEN,TARKM,TATEN,TATGD,TAVHL,TBORG,TDGYO,TEKTU,TERA,TETMT,TGSAS,TKNSA,TLMAN,TMSN,TNZTP,TRCAS,TRILC,TSGYO,TSKB,TUCLK,TUKAS,TUREX,UFUK,ULAS,ULUFA,ULUSE,ULUUN,UNLU,USAK,VAKFA,VAKFN,VAKKO,VERTU,VERUS,VESBE,VKFYO,VKGYO,VKING,VRGYO,YAPRK,YATAS,YAYLA,YEOTK,YESIL,YGGYO,YIGIT,YKSLN,YUNSA,ZEDUR,ZRGYO").replace(" GEDIK","GEDIK").split(",");
@@ -993,7 +995,7 @@ public class MainActivity extends Activity {
                         .setPositiveButton("TAMAM", null).show();
                 return;
             }
-            // A new test must never assume 1 USD = 1 TRY when the FX quote is unavailable.
+            // Resolve FX asynchronously; never perform network I/O on Android's UI thread.
             boolean hasCryptoCandidate = false;
             for (Scan candidate : latestScans) {
                 if (candidate != null && candidate.q != null && candidate.q.coin && candidate.q.price > 0) {
@@ -1001,10 +1003,32 @@ public class MainActivity extends Activity {
                     break;
                 }
             }
-            if (hasCryptoCandidate && getUsdtTryRate() <= 0) {
-                new android.app.AlertDialog.Builder(this).setTitle("Kur verisi alınamadı")
-                        .setMessage("USDT/TL dönüşüm kuru alınamadığı için yeni sanal test başlatılmadı. İnternet bağlantısını kontrol edip biraz sonra tekrar dene. Mevcut test kayıtların korunuyor.")
-                        .setPositiveButton("TAMAM", null).show();
+            if (hasCryptoCandidate && usdtTryRate <= 0) {
+                if (checkingUsdtTryRate) return;
+                checkingUsdtTryRate = true;
+                android.app.ProgressDialog progress = new android.app.ProgressDialog(this);
+                progress.setMessage("USDT/TL kuru güvenli bağlantıyla alınıyor...");
+                progress.setCancelable(false);
+                progress.show();
+                refreshPool.execute(() -> {
+                    double rate = getUsdtTryRate();
+                    runOnUiThread(() -> {
+                        checkingUsdtTryRate = false;
+                        if (isFinishing()) { if (progress.isShowing()) progress.dismiss(); return; }
+                        if (progress.isShowing()) progress.dismiss();
+                        if (rate > 0) {
+                            showVirtualSignalTest();
+                        } else {
+                            String detail = lastUsdtTryRateError == null || lastUsdtTryRateError.isEmpty()
+                                    ? "Üç kur kaynağından da geçerli yanıt alınamadı."
+                                    : lastUsdtTryRateError;
+                            new android.app.AlertDialog.Builder(this).setTitle("Kur verisi alınamadı")
+                                    .setMessage("USDT/TL dönüşüm kuru arka planda da alınamadı. " + detail
+                                            + "\nYeni test başlatılmadı; mevcut kayıtların korundu.")
+                                    .setPositiveButton("TAMAM", null).show();
+                        }
+                    });
+                });
                 return;
             }
             ArrayList<Scan> sorted = new ArrayList<>(latestScans);
@@ -1701,32 +1725,35 @@ public class MainActivity extends Activity {
 
     private synchronized double getUsdtTryRate() {
         long now = System.currentTimeMillis();
-        // Keep a successful quote for one minute. After a failed round, retry after 20 seconds.
         if (usdtTryRateUpdatedAt > 0 &&
                 now - usdtTryRateUpdatedAt < (usdtTryRate > 0 ? AUTO_REFRESH_MS : 20000L)) {
             return usdtTryRate;
         }
         usdtTryRateUpdatedAt = now;
+        lastUsdtTryRateError = "";
 
-        // Try multiple independent public USD/TRY sources; Yahoo may be blocked or unavailable.
+        // Try sources in sequence and retain the exact failure for on-screen diagnostics.
         try {
             JSONObject root = getJson("https://query1.finance.yahoo.com/v8/finance/chart/USDTRY=X?interval=1d&range=1d");
             JSONObject result = root.getJSONObject("chart").getJSONArray("result").getJSONObject(0);
             double rate = result.getJSONObject("meta").optDouble("regularMarketPrice", 0.0);
             if (rate > 0 && Double.isFinite(rate)) { usdtTryRate = rate; return usdtTryRate; }
-        } catch (Exception ignored) { }
+            lastUsdtTryRateError = "Yahoo Finance geçerli kur döndürmedi.";
+        } catch (Exception e) { lastUsdtTryRateError = "Yahoo Finance: " + e.getClass().getSimpleName() + " " + e.getMessage(); }
 
         try {
             JSONObject root = getJson("https://open.er-api.com/v6/latest/USD");
             double rate = root.getJSONObject("rates").optDouble("TRY", 0.0);
             if (rate > 0 && Double.isFinite(rate)) { usdtTryRate = rate; return usdtTryRate; }
-        } catch (Exception ignored) { }
+            lastUsdtTryRateError += " | Open ER API geçerli kur döndürmedi.";
+        } catch (Exception e) { lastUsdtTryRateError += " | Open ER API: " + e.getClass().getSimpleName() + " " + e.getMessage(); }
 
         try {
             JSONObject root = getJson("https://api.frankfurter.app/latest?from=USD&to=TRY");
             double rate = root.getJSONObject("rates").optDouble("TRY", 0.0);
             if (rate > 0 && Double.isFinite(rate)) { usdtTryRate = rate; return usdtTryRate; }
-        } catch (Exception ignored) { }
+            lastUsdtTryRateError += " | Frankfurter geçerli kur döndürmedi.";
+        } catch (Exception e) { lastUsdtTryRateError += " | Frankfurter: " + e.getClass().getSimpleName() + " " + e.getMessage(); }
 
         return usdtTryRate;
     }
