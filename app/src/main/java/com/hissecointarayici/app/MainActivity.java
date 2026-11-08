@@ -993,6 +993,20 @@ public class MainActivity extends Activity {
                         .setPositiveButton("TAMAM", null).show();
                 return;
             }
+            // A new test must never assume 1 USD = 1 TRY when the FX quote is unavailable.
+            boolean hasCryptoCandidate = false;
+            for (Scan candidate : latestScans) {
+                if (candidate != null && candidate.q != null && candidate.q.coin && candidate.q.price > 0) {
+                    hasCryptoCandidate = true;
+                    break;
+                }
+            }
+            if (hasCryptoCandidate && getUsdtTryRate() <= 0) {
+                new android.app.AlertDialog.Builder(this).setTitle("Kur verisi alınamadı")
+                        .setMessage("USDT/TL dönüşüm kuru alınamadığı için yeni sanal test başlatılmadı. İnternet bağlantısını kontrol edip biraz sonra tekrar dene. Mevcut test kayıtların korunuyor.")
+                        .setPositiveButton("TAMAM", null).show();
+                return;
+            }
             ArrayList<Scan> sorted = new ArrayList<>(latestScans);
             sorted.sort((a, b) -> Double.compare(b.score, a.score));
             HashSet<String> used = new HashSet<>();
@@ -1687,14 +1701,33 @@ public class MainActivity extends Activity {
 
     private synchronized double getUsdtTryRate() {
         long now = System.currentTimeMillis();
-        if (now - usdtTryRateUpdatedAt < AUTO_REFRESH_MS && usdtTryRateUpdatedAt > 0) return usdtTryRate;
+        // Keep a successful quote for one minute. After a failed round, retry after 20 seconds.
+        if (usdtTryRateUpdatedAt > 0 &&
+                now - usdtTryRateUpdatedAt < (usdtTryRate > 0 ? AUTO_REFRESH_MS : 20000L)) {
+            return usdtTryRate;
+        }
         usdtTryRateUpdatedAt = now;
+
+        // Try multiple independent public USD/TRY sources; Yahoo may be blocked or unavailable.
         try {
             JSONObject root = getJson("https://query1.finance.yahoo.com/v8/finance/chart/USDTRY=X?interval=1d&range=1d");
             JSONObject result = root.getJSONObject("chart").getJSONArray("result").getJSONObject(0);
             double rate = result.getJSONObject("meta").optDouble("regularMarketPrice", 0.0);
-            if (rate > 0) usdtTryRate = rate;
+            if (rate > 0 && Double.isFinite(rate)) { usdtTryRate = rate; return usdtTryRate; }
         } catch (Exception ignored) { }
+
+        try {
+            JSONObject root = getJson("https://open.er-api.com/v6/latest/USD");
+            double rate = root.getJSONObject("rates").optDouble("TRY", 0.0);
+            if (rate > 0 && Double.isFinite(rate)) { usdtTryRate = rate; return usdtTryRate; }
+        } catch (Exception ignored) { }
+
+        try {
+            JSONObject root = getJson("https://api.frankfurter.app/latest?from=USD&to=TRY");
+            double rate = root.getJSONObject("rates").optDouble("TRY", 0.0);
+            if (rate > 0 && Double.isFinite(rate)) { usdtTryRate = rate; return usdtTryRate; }
+        } catch (Exception ignored) { }
+
         return usdtTryRate;
     }
 
