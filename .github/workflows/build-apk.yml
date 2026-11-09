@@ -4,7 +4,7 @@ name: APK Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/background-virtual-test-v143]
   workflow_dispatch:
 
 jobs:
