@@ -941,7 +941,7 @@ public class MainActivity extends Activity {
                 "\n\nNot: Bu analiz teknik göstergelere dayanır ve yatırım tavsiyesi değildir.";
 
         // Koruma: eski/bozuk metinlerden gelen literal \n ifadelerini gerçek satır sonuna çevir.
-        msg = msg.replace("\n", "\n").replace("\\r", "\n");
+        msg = msg.replace("\\n", "\n").replace("\\r", "\n");
 
         new android.app.AlertDialog.Builder(this)
                 .setTitle("📊 " + s.q.name + " Analizi")
@@ -1894,19 +1894,19 @@ public class MainActivity extends Activity {
         else condition="Direnç aşılmış; kırılımın kalıcılığı ayrıca izlenmeli.";
 
         String unit = currencyFor(q.coin);
-        return "ALIM–SATIM PLANLAYICI ("+unit+")\n\n"+
-                "Alım bölgesi: "+num(entryLow, q.coin)+" – "+num(entryHigh, q.coin)+" "+unit+"\n"+
-                "Kırılım seviyesi: "+num(breakout, q.coin)+" "+unit+"\n"+
-                "Hedef 1: "+num(target1, q.coin)+" "+unit+"\n"+
-                "Hedef 2: "+num(target2, q.coin)+" "+unit+"\n"+
-                "Hedef 3: "+num(target3, q.coin)+" "+unit+"\n"+
-                "Zarar-kes: "+num(stop, q.coin)+" "+unit+"\n"+
-                "Risk/Getiri (H1): "+String.format(Locale.US,"%.2f",rr)+"R\n\n"+
-                "Destek: "+num(support, q.coin)+" "+unit+"\n"+
-                "Direnç: "+num(resistance, q.coin)+" "+unit+"\n"+
-                "ATR14: "+num(atr, q.coin)+" "+unit+"\n\n"+
-                "Durum: "+condition+"\n\n"+
-                "Hesaplama; destek/direnç, ATR14 ve mevcut fiyat kullanılarak dinamik yapılır.\n"+
+        return "ALIM–SATIM PLANLAYICI ("+unit+")\\n\\n"+
+                "Alım bölgesi: "+num(entryLow, q.coin)+" – "+num(entryHigh, q.coin)+" "+unit+"\\n"+
+                "Kırılım seviyesi: "+num(breakout, q.coin)+" "+unit+"\\n"+
+                "Hedef 1: "+num(target1, q.coin)+" "+unit+"\\n"+
+                "Hedef 2: "+num(target2, q.coin)+" "+unit+"\\n"+
+                "Hedef 3: "+num(target3, q.coin)+" "+unit+"\\n"+
+                "Zarar-kes: "+num(stop, q.coin)+" "+unit+"\\n"+
+                "Risk/Getiri (H1): "+String.format(Locale.US,"%.2f",rr)+"R\\n\\n"+
+                "Destek: "+num(support, q.coin)+" "+unit+"\\n"+
+                "Direnç: "+num(resistance, q.coin)+" "+unit+"\\n"+
+                "ATR14: "+num(atr, q.coin)+" "+unit+"\\n\\n"+
+                "Durum: "+condition+"\\n\\n"+
+                "Hesaplama; destek/direnç, ATR14 ve mevcut fiyat kullanılarak dinamik yapılır.\\n"+
                 "Bu bölüm teknik senaryodur, yatırım tavsiyesi değildir.";
     }
 
