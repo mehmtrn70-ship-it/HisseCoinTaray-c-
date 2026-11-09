@@ -81,6 +81,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
+        VirtualTestBackgroundScheduler.ensureScheduled(this);
         createSignalNotificationChannel();
         buildUi();
         loadAll();
@@ -1213,7 +1214,8 @@ public class MainActivity extends Activity {
                 + "Toplam K/Z: " + pnlSummary + "\n"
                 + "Tahmini portföy değeri: " + valueSummary + "\n"
                 + "Kazanan / kaybeden: " + winners + " / " + losers
-                + "\n\n1g/3g/7g ölçümleri, yeterli sonraki fiyat kaydı oluşunca hesaplanır. Kripto TL karşılığı tahminidir; bu bir sanal testtir, gerçek emir gönderilmez.\n";
+                + "\n\n" + backgroundCaptureStatusText()
+                + "\n1g/3g/7g ölçümleri, yeterli sonraki fiyat kaydı oluşunca hesaplanır. Kripto TL karşılığı tahminidir; bu bir sanal testtir, gerçek emir gönderilmez.\n";
         TextView content = new TextView(this);
         content.setText(summary + report.toString());
         content.setTextSize(14);
@@ -1240,6 +1242,23 @@ public class MainActivity extends Activity {
                             showVirtualSignalTest();
                         }).setNegativeButton("İPTAL", null).show())
                 .setNegativeButton("KAPAT", null).show();
+    }
+
+    private String backgroundCaptureStatusText() {
+        android.content.SharedPreferences p = getSharedPreferences("hisse_coin_paper_v1", MODE_PRIVATE);
+        long lastAttempt = p.getLong("virtual_test_bg_last_attempt", 0L);
+        long lastSuccess = p.getLong("virtual_test_bg_last_success", 0L);
+        int count = p.getInt("virtual_test_bg_last_count", 0);
+        String error = p.getString("virtual_test_bg_last_error", "");
+        java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("dd.MM HH:mm", Locale.getDefault());
+        String successText = lastSuccess > 0 ? fmt.format(new Date(lastSuccess)) : "henüz yok";
+        String attemptText = lastAttempt > 0 ? fmt.format(new Date(lastAttempt)) : "henüz çalışmadı";
+        if (lastSuccess > 0) {
+            return "Arka plan fiyat kontrolü: Son başarılı " + successText + " • " + count + " varlık. Son deneme: " + attemptText
+                    + (error.isEmpty() ? "" : " • Uyarı: " + error);
+        }
+        return "Arka plan fiyat kontrolü: Henüz başarılı kayıt yok. Son deneme: " + attemptText
+                + (error.isEmpty() ? "" : " • " + error);
     }
 
     private String virtualTestHorizon(JSONObject item, int days) {
