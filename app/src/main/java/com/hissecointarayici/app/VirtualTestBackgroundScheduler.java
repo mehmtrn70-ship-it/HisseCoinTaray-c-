@@ -2,6 +2,7 @@ package com.hissecointarayici.app;
 
 import android.content.Context;
 import androidx.work.Constraints;
+import androidx.work.Data;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.ExistingWorkPolicy;
 import androidx.work.NetworkType;
@@ -24,12 +25,14 @@ public final class VirtualTestBackgroundScheduler {
         PeriodicWorkRequest periodic = new PeriodicWorkRequest.Builder(
                 VirtualTestPriceWorker.class, 15, TimeUnit.MINUTES)
                 .setConstraints(constraints)
+                .setInputData(new Data.Builder().putString("trigger_type", "periodic").build())
                 .build();
         WorkManager.getInstance(context.getApplicationContext()).enqueueUniquePeriodicWork(
                 PERIODIC_NAME, ExistingPeriodicWorkPolicy.KEEP, periodic);
 
         OneTimeWorkRequest immediate = new OneTimeWorkRequest.Builder(VirtualTestPriceWorker.class)
                 .setConstraints(constraints)
+                .setInputData(new Data.Builder().putString("trigger_type", "immediate").build())
                 .build();
         WorkManager.getInstance(context.getApplicationContext()).enqueueUniqueWork(
                 IMMEDIATE_NAME, ExistingWorkPolicy.KEEP, immediate);
