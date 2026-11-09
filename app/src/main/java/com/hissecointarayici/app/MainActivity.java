@@ -1291,10 +1291,17 @@ public class MainActivity extends Activity {
                 long completed = item.optLong("completedAt", 0L);
                 String time = completed > 0 ? fmt.format(new Date(completed)) : "saat yok";
                 boolean success = item.optBoolean("success", false);
-                statusText.append("\n• ").append(time).append(" — ")
+                String trigger = item.optString("trigger", "unknown");
+                String triggerLabel = "periodic".equals(trigger) ? "periyodik" :
+                        ("immediate".equals(trigger) ? "uygulama açılışı" : "kaynak belirsiz");
+                String workId = item.optString("workId", "");
+                int attemptNumber = item.optInt("attemptNumber", 0);
+                statusText.append("\n• ").append(time).append(" — ").append(triggerLabel).append(" — ")
                         .append(success ? "başarılı " : "başarısız ")
                         .append(item.optInt("updated", 0)).append(" güncel / ")
                         .append(item.optInt("failed", 0)).append(" hatalı");
+                if (!workId.isEmpty()) statusText.append(" • görev ").append(workId.substring(0, Math.min(8, workId.length())));
+                if (attemptNumber > 0) statusText.append(" • deneme ").append(attemptNumber + 1);
                 String detail = item.optString("error", "");
                 if (!detail.isEmpty()) statusText.append(" — ").append(detail);
             }
