@@ -29,7 +29,7 @@ public class VirtualTestPriceWorker extends Worker {
     private static final long HORIZON_TOLERANCE_MS = 6L * 60L * 60L * 1000L;
     private static final long MAX_QUOTE_AGE_MS = 72L * 60L * 60L * 1000L;
     private static final String AUDIT_CHANNEL_ID = "virtual_test_background_audit";
-    private static final int AUDIT_NOTIFICATION_ID = 7144;
+    private static final int AUDIT_NOTIFICATION_ID_BASE = 7144;
     private static final String HISTORY_KEY = "virtual_test_bg_history";
 
     public VirtualTestPriceWorker(@NonNull Context context, @NonNull WorkerParameters params) {
@@ -122,6 +122,9 @@ public class VirtualTestPriceWorker extends Worker {
             record.put("updated", updated);
             record.put("failed", failed);
             record.put("success", success);
+            record.put("trigger", getInputData().getString("trigger_type", "unknown"));
+            record.put("workId", getId().toString());
+            record.put("attemptNumber", getRunAttemptCount());
             record.put("error", error == null ? "" : error);
             history.put(record);
             while (history.length() > 10) history.remove(0);
@@ -154,16 +157,17 @@ public class VirtualTestPriceWorker extends Worker {
                 .setContentTitle("Sanal test: arka plan kontrolü")
                 .setContentText(body)
                 .setStyle(new Notification.BigTextStyle().bigText(body))
-                .setOnlyAlertOnce(true)
+                .setOnlyAlertOnce(false)
                 .setAutoCancel(false)
                 .setShowWhen(true)
                 .setWhen(completedAt);
         Intent open = new Intent(context, MainActivity.class);
         open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent pending = PendingIntent.getActivity(context, AUDIT_NOTIFICATION_ID, open,
+        int notificationId = AUDIT_NOTIFICATION_ID_BASE + (int)(completedAt % 100000);
+        PendingIntent pending = PendingIntent.getActivity(context, notificationId, open,
                 PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0));
         builder.setContentIntent(pending);
-        manager.notify(AUDIT_NOTIFICATION_ID, builder.build());
+        manager.notify(notificationId, builder.build());
     }
 
     private static void captureHorizons(JSONObject item, double price, long quoteTime) throws Exception {
