@@ -986,6 +986,7 @@ public class MainActivity extends Activity {
     private static final double VIRTUAL_TEST_PER_SIGNAL = 2000.0;
 
     private void showVirtualSignalTest() {
+        ensureBackgroundAuditNotificationPermission();
         JSONArray test;
         try { test = new JSONArray(paperPrefs().getString("virtual_signal_test", "[]")); }
         catch (Exception e) { test = new JSONArray(); }
@@ -1244,21 +1245,61 @@ public class MainActivity extends Activity {
                 .setNegativeButton("KAPAT", null).show();
     }
 
+    private void ensureBackgroundAuditNotificationPermission() {
+        if (Build.VERSION.SDK_INT < 33 ||
+                checkSelfPermission("android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED) return;
+        android.content.SharedPreferences settings = getSharedPreferences("hisse_coin_paper_v1", MODE_PRIVATE);
+        if (settings.getBoolean("virtual_test_bg_notification_permission_asked", false)) return;
+        settings.edit().putBoolean("virtual_test_bg_notification_permission_asked", true).apply();
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Arka plan kontrol bildirimi")
+                .setMessage("Sanal test fiyat kontrolü uygulama kapalıyken başarılı olduğunda sessiz bir bildirim gösterilsin mi? Bildirim izni verilmezse fiyat kaydı yine yapılır; yalnızca bildirimle doğrulama gösterilemez.")
+                .setPositiveButton("İZİN VER", (dialog, which) ->
+                        requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, NOTIFICATION_PERMISSION_REQUEST))
+                .setNegativeButton("ŞİMDİ DEĞİL", null)
+                .show();
+    }
+
     private String backgroundCaptureStatusText() {
         android.content.SharedPreferences p = getSharedPreferences("hisse_coin_paper_v1", MODE_PRIVATE);
         long lastAttempt = p.getLong("virtual_test_bg_last_attempt", 0L);
         long lastSuccess = p.getLong("virtual_test_bg_last_success", 0L);
         int count = p.getInt("virtual_test_bg_last_count", 0);
         String error = p.getString("virtual_test_bg_last_error", "");
-        java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("dd.MM HH:mm", Locale.getDefault());
+        java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("dd.MM HH:mm:ss", Locale.getDefault());
         String successText = lastSuccess > 0 ? fmt.format(new Date(lastSuccess)) : "henüz yok";
         String attemptText = lastAttempt > 0 ? fmt.format(new Date(lastAttempt)) : "henüz çalışmadı";
+        boolean notificationAllowed = Build.VERSION.SDK_INT < 33 ||
+                checkSelfPermission("android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED;
+        StringBuilder statusText = new StringBuilder();
         if (lastSuccess > 0) {
-            return "Arka plan fiyat kontrolü: Son başarılı " + successText + " • " + count + " varlık. Son deneme: " + attemptText
-                    + (error.isEmpty() ? "" : " • Uyarı: " + error);
+            statusText.append("Arka plan fiyat kontrolü: Son başarılı ").append(successText)
+                    .append(" • ").append(count).append(" varlık. Son deneme: ").append(attemptText);
+        } else {
+            statusText.append("Arka plan fiyat kontrolü: Henüz başarılı kayıt yok. Son deneme: ").append(attemptText);
         }
-        return "Arka plan fiyat kontrolü: Henüz başarılı kayıt yok. Son deneme: " + attemptText
-                + (error.isEmpty() ? "" : " • " + error);
+        if (!error.isEmpty()) statusText.append(" • Uyarı: ").append(error);
+        statusText.append("\\nBildirim izni: ").append(notificationAllowed ? "açık" : "kapalı");
+        JSONArray history;
+        try { history = new JSONArray(p.getString("virtual_test_bg_history", "[]")); }
+        catch (Exception e) { history = new JSONArray(); }
+        if (history.length() > 0) {
+            statusText.append("\\nSon arka plan kontrol kayıtları:");
+            for (int i = history.length() - 1; i >= 0; i--) {
+                JSONObject item = history.optJSONObject(i);
+                if (item == null) continue;
+                long completed = item.optLong("completedAt", 0L);
+                String time = completed > 0 ? fmt.format(new Date(completed)) : "saat yok";
+                boolean success = item.optBoolean("success", false);
+                statusText.append("\\n• ").append(time).append(" — ")
+                        .append(success ? "başarılı " : "başarısız ")
+                        .append(item.optInt("updated", 0)).append(" güncel / ")
+                        .append(item.optInt("failed", 0)).append(" hatalı");
+                String detail = item.optString("error", "");
+                if (!detail.isEmpty()) statusText.append(" — ").append(detail);
+            }
+        }
+        return statusText.toString();
     }
 
     private String virtualTestHorizon(JSONObject item, int days) {
