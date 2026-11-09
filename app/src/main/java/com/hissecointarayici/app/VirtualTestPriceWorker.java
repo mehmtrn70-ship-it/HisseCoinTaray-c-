@@ -105,7 +105,7 @@ public class VirtualTestPriceWorker extends Worker {
                     .putString("virtual_test_bg_last_error", errors.length() == 0 ? "Yeni fiyat alınamadı" : errors.toString())
                     .commit();
         }
-        recordBackgroundRun(prefs, attemptAt, updated, failed, errors.toString(), updated > 0);
+        recordBackgroundRun(prefs, attemptAt, updated, failed, errors.toString(), updated > 0 && failed == 0);
         if (updated > 0) postAuditNotification(updated, test.length(), completedAt);
         return failed > 0 ? Result.retry() : Result.success();
     }
@@ -146,7 +146,7 @@ public class VirtualTestPriceWorker extends Worker {
         }
         java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("dd.MM HH:mm:ss", Locale.getDefault());
         String stamp = fmt.format(new java.util.Date(completedAt));
-        String body = "Başarılı • " + updated + "/" + total + " varlık • " + stamp;
+        String body = (updated == total ? "Başarılı • " : "Kısmi • ") + updated + "/" + total + " varlık • " + stamp;
         Notification.Builder builder = Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(context, AUDIT_CHANNEL_ID)
                 : new Notification.Builder(context);
