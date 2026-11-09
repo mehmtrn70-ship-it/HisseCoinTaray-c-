@@ -2,6 +2,12 @@ package com.hissecointarayici.app;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Intent;
+import android.os.Build;
 import androidx.annotation.NonNull;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
@@ -22,6 +28,9 @@ public class VirtualTestPriceWorker extends Worker {
     private static final long DAY_MS = 24L * 60L * 60L * 1000L;
     private static final long HORIZON_TOLERANCE_MS = 6L * 60L * 60L * 1000L;
     private static final long MAX_QUOTE_AGE_MS = 72L * 60L * 60L * 1000L;
+    private static final String AUDIT_CHANNEL_ID = "virtual_test_background_audit";
+    private static final int AUDIT_NOTIFICATION_ID = 7144;
+    private static final String HISTORY_KEY = "virtual_test_bg_history";
 
     public VirtualTestPriceWorker(@NonNull Context context, @NonNull WorkerParameters params) {
         super(context, params);
@@ -37,12 +46,14 @@ public class VirtualTestPriceWorker extends Worker {
             test = new JSONArray(prefs.getString(TEST_KEY, "[]"));
         } catch (Exception e) {
             saveStatus(prefs, attemptAt, 0, "Sanal test kaydı okunamadı");
+            recordBackgroundRun(prefs, attemptAt, 0, 0, "Sanal test kaydı okunamadı", false);
             return Result.failure();
         }
         if (test.length() == 0) {
             prefs.edit().putInt("virtual_test_bg_last_count", 0)
                     .putString("virtual_test_bg_last_error", "Aktif sanal test kaydı yok")
                     .commit();
+            recordBackgroundRun(prefs, attemptAt, 0, 0, "Aktif sanal test kaydı yok", false);
             return Result.success();
         }
 
@@ -61,7 +72,7 @@ public class VirtualTestPriceWorker extends Worker {
             try {
                 PriceQuote quote = coin ? fetchBinance(name) : fetchYahoo(name);
                 long age = now - quote.timestamp;
-                if (quote.price <= 0 || !Double.isFinite(quote.price)
+                if (quote.price <= 0 || (Double.isNaN(quote.price) || Double.isInfinite(quote.price))
                         || quote.timestamp <= 0 || age < -5L * 60L * 1000L || age > MAX_QUOTE_AGE_MS) {
                     throw new Exception("Fiyat verisi eski veya geçersiz");
                 }
@@ -79,11 +90,13 @@ public class VirtualTestPriceWorker extends Worker {
         boolean saved = prefs.edit().putString(TEST_KEY, test.toString()).commit();
         if (!saved) {
             saveStatus(prefs, attemptAt, updated, "Fiyat kayıtları kalıcı olarak yazılamadı");
+            recordBackgroundRun(prefs, attemptAt, updated, failed, "Fiyat kayıtları kalıcı olarak yazılamadı", false);
             return Result.retry();
         }
 
+        long completedAt = System.currentTimeMillis();
         if (updated > 0) {
-            prefs.edit().putLong("virtual_test_bg_last_success", System.currentTimeMillis())
+            prefs.edit().putLong("virtual_test_bg_last_success", completedAt)
                     .putInt("virtual_test_bg_last_count", updated)
                     .putString("virtual_test_bg_last_error", errors.toString())
                     .commit();
@@ -92,7 +105,65 @@ public class VirtualTestPriceWorker extends Worker {
                     .putString("virtual_test_bg_last_error", errors.length() == 0 ? "Yeni fiyat alınamadı" : errors.toString())
                     .commit();
         }
+        recordBackgroundRun(prefs, attemptAt, updated, failed, errors.toString(), updated > 0);
+        if (updated > 0) postAuditNotification(updated, test.length(), completedAt);
         return failed > 0 ? Result.retry() : Result.success();
+    }
+
+
+    private void recordBackgroundRun(SharedPreferences prefs, long attemptAt, int updated, int failed,
+                                    String error, boolean success) {
+        try {
+            JSONArray history = new JSONArray(prefs.getString(HISTORY_KEY, "[]"));
+            JSONObject record = new JSONObject();
+            long completedAt = System.currentTimeMillis();
+            record.put("attemptAt", attemptAt);
+            record.put("completedAt", completedAt);
+            record.put("updated", updated);
+            record.put("failed", failed);
+            record.put("success", success);
+            record.put("error", error == null ? "" : error);
+            history.put(record);
+            while (history.length() > 10) history.remove(0);
+            prefs.edit().putString(HISTORY_KEY, history.toString()).commit();
+        } catch (Exception ignored) { }
+    }
+
+    private void postAuditNotification(int updated, int total, long completedAt) {
+        Context context = getApplicationContext();
+        if (Build.VERSION.SDK_INT >= 33 &&
+                context.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) return;
+        NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) return;
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel channel = new NotificationChannel(AUDIT_CHANNEL_ID,
+                    "Sanal test arka plan kontrolü", NotificationManager.IMPORTANCE_LOW);
+            channel.setDescription("Sanal test fiyat kontrolünün son başarılı zamanını gösterir");
+            channel.setSound(null, null);
+            channel.enableVibration(false);
+            channel.enableLights(false);
+            manager.createNotificationChannel(channel);
+        }
+        java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("dd.MM HH:mm:ss", Locale.getDefault());
+        String stamp = fmt.format(new java.util.Date(completedAt));
+        String body = "Başarılı • " + updated + "/" + total + " varlık • " + stamp;
+        Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+                ? new Notification.Builder(context, AUDIT_CHANNEL_ID)
+                : new Notification.Builder(context);
+        builder.setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("Sanal test: arka plan kontrolü")
+                .setContentText(body)
+                .setStyle(new Notification.BigTextStyle().bigText(body))
+                .setOnlyAlertOnce(true)
+                .setAutoCancel(false)
+                .setShowWhen(true)
+                .setWhen(completedAt);
+        Intent open = new Intent(context, MainActivity.class);
+        open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent pending = PendingIntent.getActivity(context, AUDIT_NOTIFICATION_ID, open,
+                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0));
+        builder.setContentIntent(pending);
+        manager.notify(AUDIT_NOTIFICATION_ID, builder.build());
     }
 
     private static void captureHorizons(JSONObject item, double price, long quoteTime) throws Exception {
