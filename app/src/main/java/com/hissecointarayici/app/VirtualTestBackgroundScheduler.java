@@ -28,7 +28,7 @@ public final class VirtualTestBackgroundScheduler {
                 .setInputData(new Data.Builder().putString("trigger_type", "periodic").build())
                 .build();
         WorkManager.getInstance(context.getApplicationContext()).enqueueUniquePeriodicWork(
-                PERIODIC_NAME, ExistingPeriodicWorkPolicy.KEEP, periodic);
+                PERIODIC_NAME, ExistingPeriodicWorkPolicy.UPDATE, periodic);
 
         OneTimeWorkRequest immediate = new OneTimeWorkRequest.Builder(VirtualTestPriceWorker.class)
                 .setConstraints(constraints)
