@@ -28,7 +28,7 @@ public class VirtualTestPriceWorker extends Worker {
     private static final long DAY_MS = 24L * 60L * 60L * 1000L;
     private static final long HORIZON_TOLERANCE_MS = 6L * 60L * 60L * 1000L;
     private static final long MAX_QUOTE_AGE_MS = 72L * 60L * 60L * 1000L;
-    private static final String AUDIT_CHANNEL_ID = "virtual_test_background_audit";
+    private static final String AUDIT_CHANNEL_ID = "virtual_test_background_audit_v2";
     private static final int AUDIT_NOTIFICATION_ID_BASE = 7144;
     private static final String HISTORY_KEY = "virtual_test_bg_history";
 
@@ -141,8 +141,8 @@ public class VirtualTestPriceWorker extends Worker {
         if (manager == null) return;
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationChannel channel = new NotificationChannel(AUDIT_CHANNEL_ID,
-                    "Sanal test arka plan kontrolü", NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("Sanal test fiyat kontrolünün son başarılı zamanını gösterir");
+                    "Sanal test arka plan kontrolü", NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription("Her başarılı sanal test arka plan fiyat kontrolünde görünür bildirim gösterir");
             channel.setSound(null, null);
             channel.enableVibration(false);
             channel.enableLights(false);
@@ -159,6 +159,7 @@ public class VirtualTestPriceWorker extends Worker {
                 .setContentText(body)
                 .setStyle(new Notification.BigTextStyle().bigText(body))
                 .setOnlyAlertOnce(false)
+                .setPriority(Notification.PRIORITY_HIGH)
                 .setAutoCancel(false)
                 .setShowWhen(true)
                 .setWhen(completedAt);
