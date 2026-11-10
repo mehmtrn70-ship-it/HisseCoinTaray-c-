@@ -122,7 +122,8 @@ public class VirtualTestPriceWorker extends Worker {
             record.put("updated", updated);
             record.put("failed", failed);
             record.put("success", success);
-            record.put("trigger", getInputData().getString("trigger_type", "unknown"));
+            String trigger = getInputData().getString("trigger_type");
+            record.put("trigger", trigger == null ? "unknown" : trigger);
             record.put("workId", getId().toString());
             record.put("attemptNumber", getRunAttemptCount());
             record.put("error", error == null ? "" : error);
