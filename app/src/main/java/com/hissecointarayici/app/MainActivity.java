@@ -1253,7 +1253,7 @@ public class MainActivity extends Activity {
         settings.edit().putBoolean("virtual_test_bg_notification_permission_asked", true).apply();
         new android.app.AlertDialog.Builder(this)
                 .setTitle("Arka plan kontrol bildirimi")
-                .setMessage("Sanal test fiyat kontrolü uygulama kapalıyken başarılı olduğunda sessiz bir bildirim gösterilsin mi? Bildirim izni verilmezse fiyat kaydı yine yapılır; yalnızca bildirimle doğrulama gösterilemez.")
+                .setMessage("Sanal test fiyat kontrolü uygulama kapalıyken başarılı olduğunda sesli ve titreşimli bildirim gösterilsin mi? Bildirim izni verilmezse fiyat kaydı yine yapılır; yalnızca bildirimle doğrulama gösterilemez.")
                 .setPositiveButton("İZİN VER", (dialog, which) ->
                         requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, NOTIFICATION_PERMISSION_REQUEST))
                 .setNegativeButton("ŞİMDİ DEĞİL", null)
@@ -1280,6 +1280,15 @@ public class MainActivity extends Activity {
         }
         if (!error.isEmpty()) statusText.append(" • Uyarı: ").append(error);
         statusText.append("\nBildirim izni: ").append(notificationAllowed ? "açık" : "kapalı");
+        long notificationAt = p.getLong("virtual_test_bg_notification_last_at", 0L);
+        String notificationDetail = p.getString("virtual_test_bg_notification_last_detail", "");
+        if (notificationAt > 0) {
+            statusText.append("\nSon periyodik bildirim kaydı: ")
+                    .append(fmt.format(new Date(notificationAt)));
+            if (!notificationDetail.isEmpty()) statusText.append(" • ").append(notificationDetail);
+        } else {
+            statusText.append("\nPeriyodik bildirim kaydı: henüz yok");
+        }
         JSONArray history;
         try { history = new JSONArray(p.getString("virtual_test_bg_history", "[]")); }
         catch (Exception e) { history = new JSONArray(); }
