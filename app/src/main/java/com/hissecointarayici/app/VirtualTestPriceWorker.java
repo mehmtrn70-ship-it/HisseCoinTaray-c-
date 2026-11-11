@@ -8,6 +8,8 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
 import android.os.Build;
+import android.media.AudioAttributes;
+import android.media.RingtoneManager;
 import androidx.annotation.NonNull;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
@@ -28,7 +30,7 @@ public class VirtualTestPriceWorker extends Worker {
     private static final long DAY_MS = 24L * 60L * 60L * 1000L;
     private static final long HORIZON_TOLERANCE_MS = 6L * 60L * 60L * 1000L;
     private static final long MAX_QUOTE_AGE_MS = 72L * 60L * 60L * 1000L;
-    private static final String AUDIT_CHANNEL_ID = "virtual_test_background_audit_v2";
+    private static final String AUDIT_CHANNEL_ID = "virtual_test_background_audit_v3";
     private static final int AUDIT_NOTIFICATION_ID_BASE = 7144;
     private static final String HISTORY_KEY = "virtual_test_bg_history";
 
@@ -106,7 +108,12 @@ public class VirtualTestPriceWorker extends Worker {
                     .commit();
         }
         recordBackgroundRun(prefs, attemptAt, updated, failed, errors.toString(), updated > 0 && failed == 0);
-        if (updated > 0) postAuditNotification(updated, test.length(), completedAt);
+        String triggerType = getInputData().getString("trigger_type");
+        // Only periodic runs notify. App-open refreshes still update prices and audit history,
+        // but do not create duplicate user notifications.
+        if (updated > 0 && "periodic".equals(triggerType)) {
+            postAuditNotification(updated, test.length(), completedAt);
+        }
         return failed > 0 ? Result.retry() : Result.success();
     }
 
@@ -143,8 +150,14 @@ public class VirtualTestPriceWorker extends Worker {
             NotificationChannel channel = new NotificationChannel(AUDIT_CHANNEL_ID,
                     "Sanal test arka plan kontrolü", NotificationManager.IMPORTANCE_HIGH);
             channel.setDescription("Her başarılı sanal test arka plan fiyat kontrolünde görünür bildirim gösterir");
-            channel.setSound(null, null);
-            channel.enableVibration(false);
+            android.net.Uri notificationSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+            AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build();
+            channel.setSound(notificationSound, audioAttributes);
+            channel.enableVibration(true);
+            channel.setVibrationPattern(new long[]{0, 250, 150, 250});
             channel.enableLights(false);
             manager.createNotificationChannel(channel);
         }
@@ -158,14 +171,18 @@ public class VirtualTestPriceWorker extends Worker {
                 .setContentTitle("Sanal test: arka plan kontrolü")
                 .setContentText(body)
                 .setStyle(new Notification.BigTextStyle().bigText(body))
-                .setOnlyAlertOnce(false)
+                .setOnlyAlertOnce(true)
                 .setPriority(Notification.PRIORITY_HIGH)
+                .setCategory(Notification.CATEGORY_STATUS)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setDefaults(Notification.DEFAULT_SOUND | Notification.DEFAULT_VIBRATE)
                 .setAutoCancel(false)
                 .setShowWhen(true)
                 .setWhen(completedAt);
         Intent open = new Intent(context, MainActivity.class);
         open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        int notificationId = AUDIT_NOTIFICATION_ID_BASE + (int)(completedAt % 100000);
+        // Repeated executions in the same minute update one notification instead of stacking duplicates.
+        int notificationId = AUDIT_NOTIFICATION_ID_BASE + (int)((completedAt / 60000L) % 100000L);
         PendingIntent pending = PendingIntent.getActivity(context, notificationId, open,
                 PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0));
         builder.setContentIntent(pending);
