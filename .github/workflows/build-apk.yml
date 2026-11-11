@@ -1,6 +1,7 @@
 name: APK Build
 # Require the persistent signing key; never publish a debug APK as an update.
 # Retry after repository Actions secrets were added.
+# V152 notification channel and periodic-only alert validation.
 
 on:
   push:
