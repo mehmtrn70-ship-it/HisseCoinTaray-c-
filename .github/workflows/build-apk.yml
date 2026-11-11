@@ -4,7 +4,7 @@ name: APK Build
 
 on:
   push:
-    branches: [main, feature/background-notification-v152]
+    branches: [main, feature/background-notification-v152, feature/background-notification-v153]
   workflow_dispatch:
 
 jobs:
