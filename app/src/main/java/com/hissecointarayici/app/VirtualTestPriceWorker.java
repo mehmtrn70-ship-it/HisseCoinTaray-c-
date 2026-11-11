@@ -143,9 +143,15 @@ public class VirtualTestPriceWorker extends Worker {
     private void postAuditNotification(int updated, int total, long completedAt) {
         Context context = getApplicationContext();
         if (Build.VERSION.SDK_INT >= 33 &&
-                context.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) return;
+                context.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            saveNotificationAudit(context, completedAt, "gönderilmedi • Android bildirim izni kapalı");
+            return;
+        }
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (manager == null) return;
+        if (manager == null) {
+            saveNotificationAudit(context, completedAt, "gönderilmedi • NotificationManager kullanılamıyor");
+            return;
+        }
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationChannel channel = new NotificationChannel(AUDIT_CHANNEL_ID,
                     "Sanal test arka plan kontrolü", NotificationManager.IMPORTANCE_HIGH);
@@ -161,6 +167,26 @@ public class VirtualTestPriceWorker extends Worker {
             channel.enableLights(false);
             manager.createNotificationChannel(channel);
         }
+        boolean appNotificationsEnabled = Build.VERSION.SDK_INT < 24 || manager.areNotificationsEnabled();
+        String channelDetail = "kanal bilgisi yok";
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel actualChannel = manager.getNotificationChannel(AUDIT_CHANNEL_ID);
+            if (actualChannel != null) {
+                boolean soundEnabled = actualChannel.getSound() != null;
+                boolean vibrationEnabled = actualChannel.shouldVibrate();
+                channelDetail = "kanal önem seviyesi " + actualChannel.getImportance()
+                        + " • ses " + (soundEnabled ? "açık" : "kapalı")
+                        + " • titreşim " + (vibrationEnabled ? "açık" : "kapalı");
+                if (actualChannel.getImportance() == NotificationManager.IMPORTANCE_NONE) {
+                    saveNotificationAudit(context, completedAt, "gönderilmedi • bildirim kanalı Android ayarlarında kapalı");
+                    return;
+                }
+            }
+        }
+        if (!appNotificationsEnabled) {
+            saveNotificationAudit(context, completedAt, "gönderilmedi • uygulama bildirimleri Android ayarlarında kapalı");
+            return;
+        }
         java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("dd.MM HH:mm:ss", Locale.getDefault());
         String stamp = fmt.format(new java.util.Date(completedAt));
         String body = (updated == total ? "Başarılı • " : "Kısmi • ") + updated + "/" + total + " varlık • " + stamp;
@@ -171,7 +197,7 @@ public class VirtualTestPriceWorker extends Worker {
                 .setContentTitle("Sanal test: arka plan kontrolü")
                 .setContentText(body)
                 .setStyle(new Notification.BigTextStyle().bigText(body))
-                .setOnlyAlertOnce(true)
+                .setOnlyAlertOnce(false)
                 .setPriority(Notification.PRIORITY_HIGH)
                 .setCategory(Notification.CATEGORY_STATUS)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
@@ -181,12 +207,23 @@ public class VirtualTestPriceWorker extends Worker {
                 .setWhen(completedAt);
         Intent open = new Intent(context, MainActivity.class);
         open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        // Repeated executions in the same minute update one notification instead of stacking duplicates.
-        int notificationId = AUDIT_NOTIFICATION_ID_BASE + (int)((completedAt / 60000L) % 100000L);
+        // Keep one persistent notification: each new periodic check updates it and may alert again.
+        int notificationId = AUDIT_NOTIFICATION_ID_BASE;
         PendingIntent pending = PendingIntent.getActivity(context, notificationId, open,
                 PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0));
         builder.setContentIntent(pending);
         manager.notify(notificationId, builder.build());
+        saveNotificationAudit(context, completedAt, "bildirim gönder komutu verildi • " + channelDetail);
+    }
+
+    private static void saveNotificationAudit(Context context, long at, String detail) {
+        try {
+            SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            prefs.edit()
+                    .putLong("virtual_test_bg_notification_last_at", at)
+                    .putString("virtual_test_bg_notification_last_detail", detail)
+                    .commit();
+        } catch (Exception ignored) { }
     }
 
     private static void captureHorizons(JSONObject item, double price, long quoteTime) throws Exception {
