@@ -1061,6 +1061,7 @@ public class MainActivity extends Activity {
                     item.put("horizonCaptureVersion", 2);
                     item.put("allocationTL", VIRTUAL_TEST_PER_SIGNAL);
                     double testRate = scan.q.coin ? getUsdtTryRate() : 1.0;
+                    if (scan.q.coin) item.put("entryUsdtTryRate", testRate);
                     item.put("quantity", VIRTUAL_TEST_PER_SIGNAL / ((scan.q.coin && testRate > 0 ? testRate : 1.0) * scan.q.price));
                     item.put("currency", currencyFor(scan.q.coin));
                     created.put(item);
@@ -1182,15 +1183,19 @@ public class MainActivity extends Activity {
             boolean coin = item.optBoolean("coin", false);
             long time = item.optLong("time", 0);
             if (time > 0) start = Math.min(start, time);
-            if (pnlNative > 0) winners++; else if (pnlNative < 0) losers++;
+            // Convert the CURRENT crypto holding value to TL, then compare it with
+            // the original TL allocation. Converting only the native P/L ignores the
+            // USD/TRY movement between entry and now and can misstate the portfolio.
             // Rendering is UI-thread work: use only the last asynchronously fetched FX value.
             double fxRate = coin ? usdtTryRate : 1.0;
             if (coin && fxRate <= 0) {
                 missingCryptoRate = true;
             } else {
-                double pnlTL = pnlNative * fxRate;
+                double currentValueTL = qty * current * fxRate;
+                double pnlTL = currentValueTL - allocation;
                 totalPnlTL += pnlTL;
-                totalValueTL += allocation + pnlTL;
+                totalValueTL += currentValueTL;
+                if (pnlTL > 0) winners++; else if (pnlTL < 0) losers++;
             }
             totalInvestedTL += allocation;
             String entryStr = formatPortfolioPrice(entry, coin) + " " + currencyFor(coin);
