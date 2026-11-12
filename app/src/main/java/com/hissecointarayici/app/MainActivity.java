@@ -2001,15 +2001,20 @@ public class MainActivity extends Activity {
     }
 
     private double atr(ArrayList<Double> highs, ArrayList<Double> lows, ArrayList<Double> closes, int n) {
-        if(highs.size()<2 || lows.size()<2 || closes.size()<2) return 0;
-        int start=Math.max(1,closes.size()-n);
-        double sum=0; int count=0;
-        for(int i=start;i<closes.size() && i<highs.size() && i<lows.size();i++){
-            double prev=closes.get(i-1);
-            double tr=Math.max(highs.get(i)-lows.get(i),Math.max(Math.abs(highs.get(i)-prev),Math.abs(lows.get(i)-prev)));
-            if(tr>0){sum+=tr;count++;}
+        int size=Math.min(closes.size(),Math.min(highs.size(),lows.size()));
+        if(n<=0 || size<n+1) return 0;
+        ArrayList<Double> ranges=new ArrayList<>();
+        for(int i=1;i<size;i++){
+            double prev=closes.get(i-1), high=highs.get(i), low=lows.get(i);
+            double tr=Math.max(high-low,Math.max(Math.abs(high-prev),Math.abs(low-prev)));
+            if(Double.isFinite(tr) && tr>=0) ranges.add(tr);
         }
-        return count>0?sum/count:0;
+        if(ranges.size()<n) return 0;
+        double value=0;
+        for(int i=0;i<n;i++) value+=ranges.get(i);
+        value/=n;
+        for(int i=n;i<ranges.size();i++) value=((value*(n-1))+ranges.get(i))/n;
+        return value;
     }
 
     private double recentLow(ArrayList<Double> a,int n){
@@ -2055,10 +2060,23 @@ public class MainActivity extends Activity {
     }
 
     private double rsi(ArrayList<Double> a) {
-        if(a.size()<15)return 50; double gain=0,loss=0;
-        int start=Math.max(1,a.size()-14);
-        for(int i=start;i<a.size();i++){double d=a.get(i)-a.get(i-1); if(d>0)gain+=d;else loss-=d;}
-        if(loss==0)return 100; double rs=(gain/14)/(loss/14); return 100-(100/(1+rs));
+        final int period=14;
+        if(a.size()<period+1) return 50;
+        double gain=0,loss=0;
+        for(int i=1;i<=period;i++){
+            double change=a.get(i)-a.get(i-1);
+            if(change>0) gain+=change; else loss-=change;
+        }
+        double avgGain=gain/period, avgLoss=loss/period;
+        for(int i=period+1;i<a.size();i++){
+            double change=a.get(i)-a.get(i-1);
+            double up=Math.max(change,0), down=Math.max(-change,0);
+            avgGain=((avgGain*(period-1))+up)/period;
+            avgLoss=((avgLoss*(period-1))+down)/period;
+        }
+        if(avgLoss==0) return avgGain==0?50:100;
+        double rs=avgGain/avgLoss;
+        return 100-(100/(1+rs));
     }
 
     private String format(double x){return String.format(Locale.US,"%.4f",x);}
