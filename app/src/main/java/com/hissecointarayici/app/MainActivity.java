@@ -1752,20 +1752,25 @@ public class MainActivity extends Activity {
 
     private String reasonText(Quote q) {
         ArrayList<String> r = new ArrayList<>();
-        if(q.change > 2) r.add("24s momentum güçlü");
-        else if(q.change > 0) r.add("24s değişim pozitif");
-        else if(q.change < -2) r.add("24s düşüş baskısı");
-        else r.add("24s hareket sınırlı");
+        double changePoints = q.change>8?12:q.change>3?9:q.change>0?5:q.change< -8?-12:q.change< -3?-9:q.change<0?-5:0;
+        double rsiPoints = q.rsi>=52 && q.rsi<=65?8:q.rsi>72?-10:q.rsi>=68?-4:q.rsi<30?3:q.rsi<42?-3:0;
+        double smaPoints = q.sma>0?(q.price>q.sma?8:-8):0;
+        double macdPct = q.price>0?(q.macd/q.price)*100.0:0;
+        double macdPoints = macdPct>0.25?6:macdPct>0.05?3:macdPct< -0.25?-6:macdPct< -0.05?-3:0;
+        double volumePoints = q.volumeRatio>=2.0?6:q.volumeRatio>=1.3?4:q.volumeRatio<0.5?-5:0;
+        double resistancePoints = q.resistance>0 && q.price>q.resistance?4:0;
 
-        if(q.rsi >= 50 && q.rsi <= 68) r.add("RSI dengeli");
-        else if(q.rsi > 72) r.add("RSI yüksek");
-        else if(q.rsi < 30) r.add("RSI düşük");
-        else r.add("RSI nötr");
+        r.add("24s "+String.format(Locale.US,"%+.2f%%",q.change)+" ("+pointText(changePoints)+")");
+        r.add("RSI "+String.format(Locale.US,"%.1f",q.rsi)+" ("+pointText(rsiPoints)+")");
+        if(q.sma>0) r.add("SMA20 "+(q.price>q.sma?"üzeri":"altı")+" ("+pointText(smaPoints)+")");
+        r.add("MACD "+String.format(Locale.US,"%+.3f%%",macdPct)+" ("+pointText(macdPoints)+")");
+        r.add("Hacim "+String.format(Locale.US,"%.2fx",q.volumeRatio)+" ("+pointText(volumePoints)+")");
+        if(q.resistance>0) r.add("Direnç durumu ("+pointText(resistancePoints)+")");
+        return String.join(" • ", r)+"\\nBaşlangıç 50 puan; katkılar toplanır ve sonuç 10–95 aralığında sınırlandırılır.";
+    }
 
-        if(q.sma > 0 && q.price > q.sma) r.add("fiyat SMA20 üzerinde");
-        else if(q.sma > 0) r.add("fiyat SMA20 altında");
-
-        return String.join(" • ", r);
+    private String pointText(double points) {
+        return (points>0?"+":"")+(int)points+" puan";
     }
 
     private String signal(double score) {
@@ -1903,10 +1908,12 @@ public class MainActivity extends Activity {
         double stop=Math.max(0,support-0.50*atr);
         double entry=(entryLow+entryHigh)/2.0;
         double risk=Math.max(0.00000001,entry-stop);
+        // Hedef 1 ilk dirençtir; sonraki hedefler kırılımın üstünde ve
+        // birbirinden ayrıdır. Risk katları da alt sınır olarak korunur.
         double target1=Math.max(resistance,entry+risk);
-        double target2=Math.max(target1,entry+2*risk);
-        double target3=Math.max(target2,entry+3*risk);
         double breakout=resistance+0.10*atr;
+        double target2=Math.max(breakout+0.50*atr,entry+2*risk);
+        double target3=Math.max(target2+0.50*atr,entry+3*risk);
         double rr=(target1-entry)/risk;
 
         String condition;
