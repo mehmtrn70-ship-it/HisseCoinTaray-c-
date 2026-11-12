@@ -170,6 +170,13 @@ public class MainActivity extends Activity {
         virtualTestParams.setMargins(0, 0, 0, dp(8));
         root.addView(virtualTestBtn, virtualTestParams);
         virtualTestBtn.setOnClickListener(v -> showVirtualSignalTest());
+
+        Button earlyOpportunityBtn = makeButton("🚀 ERKEN FIRSAT AVCISI • 300 PARİTE");
+        LinearLayout.LayoutParams earlyOpportunityParams = new LinearLayout.LayoutParams(-1, -2);
+        earlyOpportunityParams.setMargins(0, 0, 0, dp(8));
+        root.addView(earlyOpportunityBtn, earlyOpportunityParams);
+        earlyOpportunityBtn.setOnClickListener(v -> startActivity(new Intent(this, EarlyOpportunityActivity.class)));
+
         LinearLayout alertRow = new LinearLayout(this);
         alertRow.setGravity(Gravity.CENTER);
         alertRow.addView(alertsBtn, new LinearLayout.LayoutParams(-1, -2));
@@ -732,6 +739,31 @@ public class MainActivity extends Activity {
         refreshingTopSignals = true;
         final ArrayList<Scan> snapshot = new ArrayList<>();
         for (int i=0; i<latestScans.size() && i<18; i++) snapshot.add(latestScans.get(i));
+
+        // Also refresh the exact assets held by the active virtual test. They may have
+        // fallen outside the visible top 18, so using latestScans alone can leave their
+        // current price and 1d/3d/7d captures stale.
+        try {
+            JSONArray activeTest = new JSONArray(paperPrefs().getString("virtual_signal_test", "[]"));
+            HashSet<String> refreshKeys = new HashSet<>();
+            for (Scan item : snapshot) {
+                if (item != null && item.q != null)
+                    refreshKeys.add((item.q.coin ? "C:" : "S:") + item.q.name);
+            }
+            for (int i = 0; i < activeTest.length(); i++) {
+                JSONObject item = activeTest.optJSONObject(i);
+                if (item == null) continue;
+                String name = item.optString("name", "");
+                boolean coin = item.optBoolean("coin", false);
+                String key = (coin ? "C:" : "S:") + name;
+                if (name.isEmpty() || !refreshKeys.add(key)) continue;
+                Quote q = new Quote(name, name, 1.0, 0.0, 50.0, 0.0);
+                q.coin = coin;
+                q.currency = coin ? "USDT" : "TL";
+                snapshot.add(new Scan(q, item.optDouble("score", 0.0)));
+            }
+        } catch (Exception ignored) { }
+
         refreshPool.execute(() -> {
             try {
                 CompletionService<ScanResult> cs = new ExecutorCompletionService<>(pool);
@@ -761,8 +793,9 @@ public class MainActivity extends Activity {
                         }
                         merged.sort((a,b)->Double.compare(b.score,a.score));
                         updatePaperPositionPrices(merged);
-                        // Keep the virtual signal test in sync with the same 60-second top-signal refresh.
-                        updateVirtualSignalTestPrices(merged);
+                        // Only pass freshly fetched quotes to the virtual test. Never let
+                        // stale entries from the visible scan list overwrite test prices.
+                        updateVirtualSignalTestPrices(new ArrayList<>(updated.values()));
                         showScans(merged, merged.size(), 0, merged.size(), "");
                         String time = new java.text.SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
                         status.setText("İlk 18 güçlü sinyal yenilendi • " + time + " • " + updated.size() + "/" + snapshot.size() + " başarılı • " + universeLabel);
@@ -1030,15 +1063,21 @@ public class MainActivity extends Activity {
                     long baseTime = item.optLong("time", 0);
                     if (baseTime > 0) {
                         long elapsed = now - baseTime;
+                        long tolerance = 60L * 60L * 1000L;
                         for (int days : new int[]{1, 3, 7}) {
                             String priceKey = "horizon" + days + "Price";
                             String timeKey = "horizon" + days + "Time";
+                            String missedKey = "horizon" + days + "Missed";
                             long target = days * day;
-                            // Capture the first available real price at or after each target.
-                            // Do not impose a narrow window that can be missed between scans.
-                            if (!item.has(priceKey) && elapsed >= target) {
-                                item.put(priceKey, scan.q.price);
-                                item.put(timeKey, now);
+                            // Use one consistent checkpoint window: target through +1 hour.
+                            // Never rewrite an existing historical checkpoint.
+                            if (!item.has(priceKey) && !item.optBoolean(missedKey, false)) {
+                                if (elapsed >= target && elapsed <= target + tolerance) {
+                                    item.put(priceKey, scan.q.price);
+                                    item.put(timeKey, now);
+                                } else if (elapsed > target + tolerance) {
+                                    item.put(missedKey, true);
+                                }
                             }
                         }
                     }
@@ -1053,6 +1092,7 @@ public class MainActivity extends Activity {
     private void renderVirtualSignalTest(JSONArray test) {
         StringBuilder report = new StringBuilder();
         double totalPnlTL = 0, totalValueTL = 0, totalInvestedTL = 0;
+        boolean missingCryptoRate = false;
         int winners = 0, losers = 0;
         long start = Long.MAX_VALUE;
         for (int i = 0; i < test.length(); i++) {
@@ -1066,10 +1106,15 @@ public class MainActivity extends Activity {
             long time = item.optLong("time", 0);
             if (time > 0) start = Math.min(start, time);
             if (pnlNative > 0) winners++; else if (pnlNative < 0) losers++;
-            double pnlTL = coin ? pnlNative * getUsdtTryRate() : pnlNative;
-            totalPnlTL += pnlTL;
+            double fxRate = coin ? getUsdtTryRate() : 1.0;
+            if (coin && fxRate <= 0) {
+                missingCryptoRate = true;
+            } else {
+                double pnlTL = pnlNative * fxRate;
+                totalPnlTL += pnlTL;
+                totalValueTL += allocation + pnlTL;
+            }
             totalInvestedTL += allocation;
-            totalValueTL += allocation + pnlTL;
             String entryStr = formatPortfolioPrice(entry, coin) + " " + currencyFor(coin);
             String currentStr = formatPortfolioPrice(current, coin) + " " + currencyFor(coin);
             report.append("\n").append(i + 1).append(". ").append(item.optString("name"))
@@ -1083,13 +1128,14 @@ public class MainActivity extends Activity {
         if (start == Long.MAX_VALUE) start = System.currentTimeMillis();
         long elapsed = Math.max(0, System.currentTimeMillis() - start);
         String elapsedText = String.format(Locale.US, "%d gün %d saat", elapsed / 86400000L, (elapsed % 86400000L) / 3600000L);
-        String summary = "Başlangıç sermayesi: 10.000 TL\n"
-                + "Dağılım: Her sinyale 2.000 TL (en fazla 5 farklı varlık)\n"
-                + "Kayıtlı sinyal: " + test.length() + "/5\n"
-                + "Geçen süre: " + elapsedText + "\n"
-                + "Toplam K/Z: " + String.format(Locale.US, "%+.2f TL (yaklaşık)", totalPnlTL) + "\n"
-                + "Tahmini portföy değeri: " + String.format(Locale.US, "%.2f TL (yaklaşık)", totalValueTL) + "\n"
-                + "Kazanan / kaybeden: " + winners + " / " + losers
+        String pnlSummary = missingCryptoRate ? "kur verisi yok — hesaplanamadı" : String.format(Locale.US, "%+.2f TL (yaklaşık)", totalPnlTL);
+        String valueSummary = missingCryptoRate ? "kur verisi yok — hesaplanamadı" : String.format(Locale.US, "%.2f TL (yaklaşık)", totalValueTL);
+        String summary = "Başlangıç sermayesi: 10.000 TL\\n"
+                + "Dağılım: Her sinyale 2.000 TL (en fazla 5 farklı varlık)\\n"
+                + "Kayıtlı sinyal: " + test.length() + "/5\\n"
+                + "Geçen süre: " + elapsedText + "\\n"
+                + "Toplam K/Z: " + pnlSummary + "\\n"
+                + "Tahmini portföy değeri: " + valueSummary + "\\n"                + "Kazanan / kaybeden: " + winners + " / " + losers
                 + "\n\n1g/3g/7g ölçümleri, yeterli sonraki fiyat kaydı oluşunca hesaplanır. Kripto TL karşılığı tahminidir; bu bir sanal testtir, gerçek emir gönderilmez.\n";
         TextView content = new TextView(this);
         content.setText(summary + report.toString());
@@ -1134,7 +1180,7 @@ public class MainActivity extends Activity {
             return String.format(Locale.US, "%+.2f%%", savedPct) + timing;
         }
         long target = days * 24L * 60L * 60L * 1000L;
-        long tolerance = 24L * 60L * 60L * 1000L;
+        long tolerance = 60L * 60L * 1000L;
         JSONArray history;
         try { history = new JSONArray(paperPrefs().getString("signal_history", "[]")); }
         catch (Exception e) { return "bekleniyor"; }
@@ -1154,7 +1200,8 @@ public class MainActivity extends Activity {
             long elapsedNow = System.currentTimeMillis() - baseTime;
             // Do not leave a missed measurement window showing "waiting" forever.
             // Historical prices cannot be reconstructed if no snapshot was recorded.
-            if (elapsedNow > target + tolerance) return "ölçüm penceresi kaçtı";
+            if (item.optBoolean("horizon" + days + "Missed", false) || elapsedNow > target + tolerance)
+                return "ölçüm penceresi kaçtı";
             return "bekleniyor";
         }
         double pct = (nearest.optDouble("price", 0) - basePrice) * 100.0 / basePrice;
