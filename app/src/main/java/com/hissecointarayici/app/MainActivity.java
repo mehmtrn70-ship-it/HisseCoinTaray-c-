@@ -1342,7 +1342,9 @@ public class MainActivity extends Activity {
             return String.format(Locale.US, "%+.2f%%", savedPct) + timing;
         }
         long target = days * 24L * 60L * 60L * 1000L;
-        long tolerance = 60L * 60L * 1000L;
+        // Match the checkpoint writer's 6-hour capture window so a valid
+        // background observation is not reported as missed by the display layer.
+        long tolerance = 6L * 60L * 60L * 1000L;
         JSONArray history;
         try { history = new JSONArray(paperPrefs().getString("signal_history", "[]")); }
         catch (Exception e) { return "bekleniyor"; }
