@@ -1905,10 +1905,15 @@ public class MainActivity extends Activity {
 
         double entryLow=Math.max(support, q.price-0.60*atr);
         double entryHigh=Math.min(q.price, support+0.35*atr);
-        if(entryHigh<entryLow) { entryLow=Math.max(0,q.price-0.50*atr); entryHigh=q.price; }
+        boolean fallbackEntryZone=entryHigh<entryLow;
+        if(fallbackEntryZone) { entryLow=Math.max(0,q.price-0.50*atr); entryHigh=q.price; }
 
-        double stop=Math.max(0,support-0.50*atr);
         double entry=(entryLow+entryHigh)/2.0;
+        // Destek alım bölgesinden uzakta kalıyorsa, uzak bir pivotu zarar-kes
+        // kabul edip risk/hedefleri şişirmeyiz; ATR bazlı kontrollü stop kullanırız.
+        double stop=fallbackEntryZone
+                ? Math.max(0,entry-2.0*atr)
+                : Math.max(0,support-0.50*atr);
         double risk=Math.max(0.00000001,entry-stop);
         // Hedef 1 ilk dirençtir; sonraki hedefler kırılımın üstünde ve
         // birbirinden ayrıdır. Risk katları da alt sınır olarak korunur.
@@ -1919,7 +1924,8 @@ public class MainActivity extends Activity {
         double rr=(target1-entry)/risk;
 
         String condition;
-        if(q.price<=entryHigh) condition="Fiyat alım bölgesine yakın.";
+        if(fallbackEntryZone) condition="Yakın destek alım bölgesinden uzak; ATR bazlı zarar-kes senaryosu kullanıldı.";
+        else if(q.price<=entryHigh) condition="Fiyat alım bölgesine yakın.";
         else if(q.price<breakout) condition="Fiyat alım bölgesinin üzerinde; geri çekilme beklemek daha kontrollü.";
         else condition="Direnç aşılmış; kırılımın kalıcılığı ayrıca izlenmeli.";
 
