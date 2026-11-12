@@ -170,6 +170,13 @@ public class MainActivity extends Activity {
         virtualTestParams.setMargins(0, 0, 0, dp(8));
         root.addView(virtualTestBtn, virtualTestParams);
         virtualTestBtn.setOnClickListener(v -> showVirtualSignalTest());
+
+        Button earlyOpportunityBtn = makeButton("🚀 ERKEN FIRSAT AVCISI • 300 PARİTE");
+        LinearLayout.LayoutParams earlyOpportunityParams = new LinearLayout.LayoutParams(-1, -2);
+        earlyOpportunityParams.setMargins(0, 0, 0, dp(8));
+        root.addView(earlyOpportunityBtn, earlyOpportunityParams);
+        earlyOpportunityBtn.setOnClickListener(v -> startActivity(new Intent(this, EarlyOpportunityActivity.class)));
+
         LinearLayout alertRow = new LinearLayout(this);
         alertRow.setGravity(Gravity.CENTER);
         alertRow.addView(alertsBtn, new LinearLayout.LayoutParams(-1, -2));
@@ -732,6 +739,31 @@ public class MainActivity extends Activity {
         refreshingTopSignals = true;
         final ArrayList<Scan> snapshot = new ArrayList<>();
         for (int i=0; i<latestScans.size() && i<18; i++) snapshot.add(latestScans.get(i));
+
+        // Also refresh the exact assets held by the active virtual test. They may have
+        // fallen outside the visible top 18, so using latestScans alone can leave their
+        // current price and 1d/3d/7d captures stale.
+        try {
+            JSONArray activeTest = new JSONArray(paperPrefs().getString("virtual_signal_test", "[]"));
+            HashSet<String> refreshKeys = new HashSet<>();
+            for (Scan item : snapshot) {
+                if (item != null && item.q != null)
+                    refreshKeys.add((item.q.coin ? "C:" : "S:") + item.q.name);
+            }
+            for (int i = 0; i < activeTest.length(); i++) {
+                JSONObject item = activeTest.optJSONObject(i);
+                if (item == null) continue;
+                String name = item.optString("name", "");
+                boolean coin = item.optBoolean("coin", false);
+                String key = (coin ? "C:" : "S:") + name;
+                if (name.isEmpty() || !refreshKeys.add(key)) continue;
+                Quote q = new Quote(name, name, 1.0, 0.0, 50.0, 0.0);
+                q.coin = coin;
+                q.currency = coin ? "USDT" : "TL";
+                snapshot.add(new Scan(q, item.optDouble("score", 0.0)));
+            }
+        } catch (Exception ignored) { }
+
         refreshPool.execute(() -> {
             try {
                 CompletionService<ScanResult> cs = new ExecutorCompletionService<>(pool);
@@ -761,8 +793,9 @@ public class MainActivity extends Activity {
                         }
                         merged.sort((a,b)->Double.compare(b.score,a.score));
                         updatePaperPositionPrices(merged);
-                        // Keep the virtual signal test in sync with the same 60-second top-signal refresh.
-                        updateVirtualSignalTestPrices(merged);
+                        // Only pass freshly fetched quotes to the virtual test. Never let
+                        // stale entries from the visible scan list overwrite test prices.
+                        updateVirtualSignalTestPrices(new ArrayList<>(updated.values()));
                         showScans(merged, merged.size(), 0, merged.size(), "");
                         String time = new java.text.SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
                         status.setText("İlk 18 güçlü sinyal yenilendi • " + time + " • " + updated.size() + "/" + snapshot.size() + " başarılı • " + universeLabel);
