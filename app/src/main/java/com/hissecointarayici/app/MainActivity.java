@@ -1813,7 +1813,10 @@ public class MainActivity extends Activity {
         ArrayList<Double> lows=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("low"));
         ArrayList<Double> vols=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("volume"));
         double a=atr(highs,lows,c,14), sup=recentLow(lows,20), res=recentHigh(highs,20);
-        return new Quote(name,format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res,false);
+        Quote quote = new Quote(name,format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res,false);
+        quote.resistance5=recentHigh(highs,5);
+        quote.resistance10=recentHigh(highs,10);
+        return quote;
     }
 
     private String[] discoverCoins(int limit) throws Exception {
@@ -1849,6 +1852,8 @@ public class MainActivity extends Activity {
         for(int i=0;i<k.length();i++){ JSONArray row=k.getJSONArray(i); highs.add(row.getDouble(2)); lows.add(row.getDouble(3)); c.add(row.getDouble(4)); vols.add(row.getDouble(5)); }
         double a=atr(highs,lows,c,14), sup=recentLow(lows,20), res=recentHigh(highs,20);
         Quote quote = new Quote(symbol.replace("USDT",""),format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res,true);
+        quote.resistance5=recentHigh(highs,5);
+        quote.resistance10=recentHigh(highs,10);
         double rate = getUsdtTryRate();
         quote.tryPrice = rate > 0 ? price * rate : 0.0;
         return quote;
@@ -1929,18 +1934,34 @@ public class MainActivity extends Activity {
                 ? Math.max(0,entry-2.0*atr)
                 : Math.max(0,support-0.50*atr);
         double risk=Math.max(0.00000001,entry-stop);
-        // Hedef 1 ilk dirençtir; sonraki hedefler kırılımın üstünde ve
-        // birbirinden ayrıdır. Risk katları da alt sınır olarak korunur.
-        double target1=Math.max(resistance,entry+risk);
-        double breakout=resistance+0.10*atr;
-        double target2=Math.max(breakout+0.50*atr,entry+2*risk);
-        double target3=Math.max(target2+0.50*atr,entry+3*risk);
+        // Tamamlanmış 5/10/20 günlük mumların tepe seviyelerinden fiyatın
+        // üzerindeki en yakın direnci seç; uzak 20 günlük tepeyi otomatik
+        // olarak ilk hedefe koyma.
+        double[] resistanceLevels={q.resistance5,q.resistance10,resistance};
+        double firstResistance=nearestResistanceAbove(resistanceLevels,Math.max(entry,q.price));
+        boolean target1HasResistance=firstResistance>0;
+        double target1=target1HasResistance
+                ? Math.max(firstResistance,entry+risk)
+                : entry+Math.max(risk,0.50*atr);
+        double breakout=target1+0.10*atr;
+        double secondResistance=nearestResistanceAbove(resistanceLevels,target1+0.10*atr);
+        boolean target2HasResistance=secondResistance>0;
+        double target2=target2HasResistance
+                ? Math.max(secondResistance,target1+0.50*atr)
+                : target1+Math.max(0.50*atr,risk);
+        double thirdResistance=nearestResistanceAbove(resistanceLevels,target2+0.10*atr);
+        boolean target3HasResistance=thirdResistance>0;
+        double target3=thirdResistance>0
+                ? Math.max(thirdResistance,target2+0.50*atr)
+                : target2+Math.max(0.50*atr,risk);
         double rr=(target1-entry)/risk;
-        String targetWarning = rr >= 3.0
-                ? "Uyarı: Hedef 1 ilk dirençte ve girişten uzak. " +
+        String targetWarning = !target1HasResistance
+                ? "Uyarı: Fiyatın üzerinde yakın 5/10/20 günlük direnç bulunamadı. Hedef 1 ATR/risk bazlı yaklaşık seviyedir; doğrulanmış direnç değildir."
+                : rr >= 3.0
+                ? "Uyarı: İlk bulunan direnç girişten uzak. " +
                   String.format(Locale.US,"%.2fR",rr) +
                   " oranı teoriktir; direnç aşılmadan hedef teyit edilmiş sayılmaz."
-                : "Hedef 1 ilk direnç veya en az 1R seviyesidir; kırılım teyidi direnç üstünde aranır.";
+                : "Hedef 1, tamamlanmış günlük mumlardaki en yakın üst dirençtir; kırılım teyidi bu seviyenin üzerinde aranır.";
 
         String condition;
         if(fallbackEntryZone) condition="Yakın destek alım bölgesinden uzak; ATR bazlı zarar-kes senaryosu kullanıldı.";
@@ -1952,9 +1973,9 @@ public class MainActivity extends Activity {
         return "ALIM–SATIM PLANLAYICI ("+unit+")\\n\\n"+
                 "Alım bölgesi: "+num(entryLow, q.coin)+" – "+num(entryHigh, q.coin)+" "+unit+"\\n"+
                 "Kırılım teyidi: "+num(breakout, q.coin)+" "+unit+"\\n"+
-                "Hedef 1 (ilk direnç / en az 1R): "+num(target1, q.coin)+" "+unit+"\\n"+
-                "Hedef 2: "+num(target2, q.coin)+" "+unit+"\\n"+
-                "Hedef 3: "+num(target3, q.coin)+" "+unit+"\\n"+
+                "Hedef 1 ("+(target1HasResistance?"yakın direnç":"ATR/risk bazlı")+"/ en az 1R): "+num(target1, q.coin)+" "+unit+"\\n"+
+                "Hedef 2 ("+(target2HasResistance?"sonraki direnç":"ATR uzatımı")+"): "+num(target2, q.coin)+" "+unit+"\\n"+
+                "Hedef 3 ("+(target3HasResistance?"sonraki direnç":"ATR uzatımı")+"): "+num(target3, q.coin)+" "+unit+"\\n"+
                 "Zarar-kes: "+num(stop, q.coin)+" "+unit+"\\n"+
                 "Risk/Getiri (H1): "+String.format(Locale.US,"%.2f",rr)+"R\\n\\n"+
                 "Destek: "+num(support, q.coin)+" "+unit+"\\n"+
@@ -1963,8 +1984,8 @@ public class MainActivity extends Activity {
                 "Durum: "+condition+"\\n"+
                 targetWarning+"\\n\\n"+
                 "Alım bölgesi minimum genişliği ATR14'ün %25'i veya fiyatın %0,10'udur.\\n"+
-                "Hedef 1 ilk dirençtir; kırılım seviyesi direncin üzerinde teyit eşiğidir.\\n"+
-                "Hesaplama; destek/direnç, ATR14 ve mevcut fiyat kullanılarak dinamik yapılır.\\n"+
+                "Hedefler tamamlanmış 5/10/20 günlük mumların tepe seviyelerinden seçilir; sonraki direnç yoksa ATR/risk uzatımı kullanılır.\\n"+
+                "Kırılım teyidi Hedef 1'in %10 ATR üzerindedir; günlük mum verisine dayanır, gün içi direnç garantisi değildir.\\n"+
                 "Bu bölüm teknik senaryodur, yatırım tavsiyesi değildir.";
     }
 
@@ -2039,6 +2060,14 @@ public class MainActivity extends Activity {
         return value;
     }
 
+    private double nearestResistanceAbove(double[] levels,double threshold){
+        double best=Double.MAX_VALUE;
+        for(double level:levels){
+            if(Double.isFinite(level) && level>threshold && level<best) best=level;
+        }
+        return best==Double.MAX_VALUE?0:best;
+    }
+
     private double recentLow(ArrayList<Double> a,int n){
         if(a.size()<2) return a.isEmpty()?0:a.get(0);
         int end=a.size()-1;
@@ -2105,7 +2134,7 @@ public class MainActivity extends Activity {
     private String pct(double x){return String.format(Locale.US,"%+.2f%%",x);}
 
     static class Quote {
-        String name,priceText,currency; boolean coin; double price,change,rsi,sma,macd,volumeRatio,atr,support,resistance,tryPrice;
+        String name,priceText,currency; boolean coin; double price,change,rsi,sma,macd,volumeRatio,atr,support,resistance,resistance5,resistance10,tryPrice;
         Quote(String n,String p,double pr,double ch,double r,double s){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=0;volumeRatio=1;atr=0;support=0;resistance=0;tryPrice=0;coin=false;currency="TL";}
         Quote(String n,String p,double pr,double ch,double r,double s,double m,double vr,double a,double sup,double res,boolean isCoin){name=n;priceText=p;price=pr;change=ch;rsi=r;sma=s;macd=m;volumeRatio=vr;atr=a;support=sup;resistance=res;tryPrice=0;coin=isCoin;currency=isCoin?"USDT":"TL";}
     }
