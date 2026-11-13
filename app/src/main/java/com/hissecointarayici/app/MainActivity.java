@@ -920,9 +920,13 @@ public class MainActivity extends Activity {
         String trend = s.q.sma > 0 && s.q.price > s.q.sma ? "Yukarı trend" :
                 s.q.sma > 0 ? "SMA20 altında" : "Trend verisi sınırlı";
         String momentum = s.q.change > 0 ? "Pozitif" : s.q.change < 0 ? "Negatif" : "Nötr";
+        String macdDirection = s.q.macd > 0 ? "Pozitif" : s.q.macd < 0 ? "Negatif" : "Nötr";
         String rsiText = s.q.rsi >= 50 && s.q.rsi <= 68 ? "Olumlu bölge" :
                 s.q.rsi > 72 ? "Aşırı alım riski" :
-                s.q.rsi < 30 ? "Aşırı satım bölgesi" : "Nötr bölge";
+                s.q.rsi >= 68 ? "Aşırı alıma yaklaşıyor" :
+                s.q.rsi < 30 ? "Aşırı satım bölgesi" :
+                s.q.rsi < 35 ? "Aşırı satıma yakın" :
+                s.q.rsi < 50 ? "Nötr-zayıf bölge" : "Nötr bölge";
 
         String msg = s.q.name + "\n\n" +
                 "Skor: " + String.format(Locale.US,"%.0f/100",s.score) + "\n" +
@@ -933,7 +937,8 @@ public class MainActivity extends Activity {
                 "RSI: " + String.format(Locale.US,"%.1f",s.q.rsi) + " — " + rsiText + "\n" +
                 "SMA20: " + (s.q.sma > 0 ? formatPortfolioPrice(s.q.sma, s.q.coin) + " " + currencyFor(s.q.coin) : "-") + "\n" +
                 "Trend: " + trend + "\n" +
-                "Momentum: " + momentum + "\n" +
+                "24s momentum: " + momentum + "\n" +
+                "MACD yönü: " + macdDirection + "\n" +
                 "MACD: " + String.format(Locale.US,"%.4f",s.q.macd) + "\n" +
                 "Hacim gücü: " + String.format(Locale.US,"%.2fx",s.q.volumeRatio) + "\n\n" +
                 "Neden bu skor?\n" + reasonText(s.q) +
@@ -1908,6 +1913,15 @@ public class MainActivity extends Activity {
         boolean fallbackEntryZone=entryHigh<entryLow;
         if(fallbackEntryZone) { entryLow=Math.max(0,q.price-0.50*atr); entryHigh=q.price; }
 
+        // Çok dar destek bölgeleri, ATR'nin en az %25'i kadar bir banda genişletilir.
+        // Böylece birkaç tiklik, pratikte kullanışsız alım aralıkları önlenir.
+        double minEntryWidth=Math.max(q.price*0.001,0.25*atr);
+        if(entryHigh-entryLow<minEntryWidth) {
+            double center=(entryLow+entryHigh)/2.0;
+            entryLow=Math.max(0,center-minEntryWidth/2.0);
+            entryHigh=entryLow+minEntryWidth;
+        }
+
         double entry=(entryLow+entryHigh)/2.0;
         // Destek alım bölgesinden uzakta kalıyorsa, uzak bir pivotu zarar-kes
         // kabul edip risk/hedefleri şişirmeyiz; ATR bazlı kontrollü stop kullanırız.
@@ -1922,6 +1936,11 @@ public class MainActivity extends Activity {
         double target2=Math.max(breakout+0.50*atr,entry+2*risk);
         double target3=Math.max(target2+0.50*atr,entry+3*risk);
         double rr=(target1-entry)/risk;
+        String targetWarning = rr >= 3.0
+                ? "Uyarı: Hedef 1 ilk dirençte ve girişten uzak. " +
+                  String.format(Locale.US,"%.2fR",rr) +
+                  " oranı teoriktir; direnç aşılmadan hedef teyit edilmiş sayılmaz."
+                : "Hedef 1 ilk direnç veya en az 1R seviyesidir; kırılım teyidi direnç üstünde aranır.";
 
         String condition;
         if(fallbackEntryZone) condition="Yakın destek alım bölgesinden uzak; ATR bazlı zarar-kes senaryosu kullanıldı.";
@@ -1932,8 +1951,8 @@ public class MainActivity extends Activity {
         String unit = currencyFor(q.coin);
         return "ALIM–SATIM PLANLAYICI ("+unit+")\\n\\n"+
                 "Alım bölgesi: "+num(entryLow, q.coin)+" – "+num(entryHigh, q.coin)+" "+unit+"\\n"+
-                "Kırılım seviyesi: "+num(breakout, q.coin)+" "+unit+"\\n"+
-                "Hedef 1: "+num(target1, q.coin)+" "+unit+"\\n"+
+                "Kırılım teyidi: "+num(breakout, q.coin)+" "+unit+"\\n"+
+                "Hedef 1 (ilk direnç / en az 1R): "+num(target1, q.coin)+" "+unit+"\\n"+
                 "Hedef 2: "+num(target2, q.coin)+" "+unit+"\\n"+
                 "Hedef 3: "+num(target3, q.coin)+" "+unit+"\\n"+
                 "Zarar-kes: "+num(stop, q.coin)+" "+unit+"\\n"+
@@ -1941,7 +1960,10 @@ public class MainActivity extends Activity {
                 "Destek: "+num(support, q.coin)+" "+unit+"\\n"+
                 "Direnç: "+num(resistance, q.coin)+" "+unit+"\\n"+
                 "ATR14: "+num(atr, q.coin)+" "+unit+"\\n\\n"+
-                "Durum: "+condition+"\\n\\n"+
+                "Durum: "+condition+"\\n"+
+                targetWarning+"\\n\\n"+
+                "Alım bölgesi minimum genişliği ATR14'ün %25'i veya fiyatın %0,10'udur.\\n"+
+                "Hedef 1 ilk dirençtir; kırılım seviyesi direncin üzerinde teyit eşiğidir.\\n"+
                 "Hesaplama; destek/direnç, ATR14 ve mevcut fiyat kullanılarak dinamik yapılır.\\n"+
                 "Bu bölüm teknik senaryodur, yatırım tavsiyesi değildir.";
     }
