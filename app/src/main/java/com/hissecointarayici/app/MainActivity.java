@@ -1059,7 +1059,9 @@ public class MainActivity extends Activity {
                     item.put("horizonCaptureVersion", 1);
                     item.put("allocationTL", VIRTUAL_TEST_PER_SIGNAL);
                     double testRate = scan.q.coin ? getUsdtTryRate() : 1.0;
-                    item.put("quantity", VIRTUAL_TEST_PER_SIGNAL / ((scan.q.coin && testRate > 0 ? testRate : 1.0) * scan.q.price));
+                    if (scan.q.coin && testRate <= 0) throw new IllegalStateException("USDT/TL kuru yok; sanal miktar hesaplanamadı.");
+                    item.put("entryFxRate", testRate);
+                    item.put("quantity", VIRTUAL_TEST_PER_SIGNAL / (testRate * scan.q.price));
                     item.put("currency", currencyFor(scan.q.coin));
                     created.put(item);
                 } catch (Exception ignored) { }
@@ -1131,6 +1133,8 @@ public class MainActivity extends Activity {
         StringBuilder report = new StringBuilder();
         double totalPnlTL = 0, totalValueTL = 0, totalInvestedTL = 0;
         boolean missingCryptoRate = false;
+        // Use one FX snapshot for the whole report so entries cannot be valued at different rates.
+        double reportFxRate = getUsdtTryRate();
         int winners = 0, losers = 0;
         long start = Long.MAX_VALUE;
         for (int i = 0; i < test.length(); i++) {
@@ -1144,14 +1148,22 @@ public class MainActivity extends Activity {
             long time = item.optLong("time", 0);
             if (time > 0) start = Math.min(start, time);
             if (pnlNative > 0) winners++; else if (pnlNative < 0) losers++;
-            double fxRate = coin ? getUsdtTryRate() : 1.0;
-            if (coin && fxRate <= 0) {
-                missingCryptoRate = true;
+            double pnlTL;
+            if (coin) {
+                if (reportFxRate <= 0 || qty <= 0) {
+                    missingCryptoRate = true;
+                    totalInvestedTL += allocation;
+                    continue;
+                }
+                // Value the current units in TL, then subtract their original TL allocation.
+                // This includes both token-price movement and USDT/TRY movement.
+                double currentValueTL = current * qty * reportFxRate;
+                pnlTL = currentValueTL - allocation;
             } else {
-                double pnlTL = pnlNative * fxRate;
-                totalPnlTL += pnlTL;
-                totalValueTL += allocation + pnlTL;
+                pnlTL = pnlNative;
             }
+            totalPnlTL += pnlTL;
+            totalValueTL += allocation + pnlTL;
             totalInvestedTL += allocation;
             String entryStr = formatPortfolioPrice(entry, coin) + " " + currencyFor(coin);
             String currentStr = formatPortfolioPrice(current, coin) + " " + currencyFor(coin);
