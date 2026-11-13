@@ -1937,26 +1937,29 @@ public class MainActivity extends Activity {
         // Tamamlanmış 5/10/20 günlük mumların tepe seviyelerinden fiyatın
         // üzerindeki en yakın direnci seç; uzak 20 günlük tepeyi otomatik
         // olarak ilk hedefe koyma.
-        double[] resistanceLevels={q.resistance5,q.resistance10,resistance};
+        double[] resistanceLevels={q.resistance5,q.resistance10,q.resistance};
         double firstResistance=nearestResistanceAbove(resistanceLevels,Math.max(entry,q.price));
         boolean target1HasResistance=firstResistance>0;
+        boolean target1AtResistance=target1HasResistance && firstResistance>=entry+risk;
         double target1=target1HasResistance
                 ? Math.max(firstResistance,entry+risk)
                 : entry+Math.max(risk,0.50*atr);
         double breakout=target1+0.10*atr;
         double secondResistance=nearestResistanceAbove(resistanceLevels,target1+0.10*atr);
-        boolean target2HasResistance=secondResistance>0;
-        double target2=target2HasResistance
+        boolean target2HasResistance=secondResistance>target1+0.50*atr;
+        double target2=secondResistance>0
                 ? Math.max(secondResistance,target1+0.50*atr)
                 : target1+Math.max(0.50*atr,risk);
         double thirdResistance=nearestResistanceAbove(resistanceLevels,target2+0.10*atr);
-        boolean target3HasResistance=thirdResistance>0;
+        boolean target3HasResistance=thirdResistance>target2+0.50*atr;
         double target3=thirdResistance>0
                 ? Math.max(thirdResistance,target2+0.50*atr)
                 : target2+Math.max(0.50*atr,risk);
         double rr=(target1-entry)/risk;
         String targetWarning = !target1HasResistance
                 ? "Uyarı: Fiyatın üzerinde yakın 5/10/20 günlük direnç bulunamadı. Hedef 1 ATR/risk bazlı yaklaşık seviyedir; doğrulanmış direnç değildir."
+                : !target1AtResistance
+                ? "Uyarı: En yakın direnç 1R alt sınırından önce. Hedef 1, en az 1R koşulu için yukarı taşındı."
                 : rr >= 3.0
                 ? "Uyarı: İlk bulunan direnç girişten uzak. " +
                   String.format(Locale.US,"%.2fR",rr) +
@@ -1973,7 +1976,7 @@ public class MainActivity extends Activity {
         return "ALIM–SATIM PLANLAYICI ("+unit+")\\n\\n"+
                 "Alım bölgesi: "+num(entryLow, q.coin)+" – "+num(entryHigh, q.coin)+" "+unit+"\\n"+
                 "Kırılım teyidi: "+num(breakout, q.coin)+" "+unit+"\\n"+
-                "Hedef 1 ("+(target1HasResistance?"yakın direnç":"ATR/risk bazlı")+"/ en az 1R): "+num(target1, q.coin)+" "+unit+"\\n"+
+                "Hedef 1 ("+(target1AtResistance?"yakın direnç":(target1HasResistance?"1R alt sınırı":"ATR/risk bazlı"))+"): "+num(target1, q.coin)+" "+unit+"\\n"+
                 "Hedef 2 ("+(target2HasResistance?"sonraki direnç":"ATR uzatımı")+"): "+num(target2, q.coin)+" "+unit+"\\n"+
                 "Hedef 3 ("+(target3HasResistance?"sonraki direnç":"ATR uzatımı")+"): "+num(target3, q.coin)+" "+unit+"\\n"+
                 "Zarar-kes: "+num(stop, q.coin)+" "+unit+"\\n"+
