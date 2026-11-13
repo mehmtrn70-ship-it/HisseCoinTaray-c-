@@ -1155,9 +1155,8 @@ public class MainActivity extends Activity {
                     totalInvestedTL += allocation;
                     continue;
                 }
-                // Recover the original FX rate for older tests from their stored allocation and quantity.
-                double entryFxRate = item.optDouble("entryFxRate", 0);
-                if (entryFxRate <= 0 && entry > 0 && qty > 0) entryFxRate = allocation / (entry * qty);
+                // Value the current units in TL, then subtract their original TL allocation.
+                // This includes both token-price movement and USDT/TRY movement.
                 double currentValueTL = current * qty * reportFxRate;
                 pnlTL = currentValueTL - allocation;
             } else {
