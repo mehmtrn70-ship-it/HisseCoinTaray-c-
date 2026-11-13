@@ -5,7 +5,7 @@ name: APK Build
 
 on:
   push:
-    branches: [main, feature/background-virtual-test-v143, feature/background-audit-v144, feature/background-audit-v148, feature/background-notification-v151, feature/background-notification-v152, feature/background-notification-v153, fix/virtual-test-tl-valuation-v154, fix/plan-target-score-v158, fix/plan-stop-distance-v160, fix/plan-zone-target-rsi-v162]
+    branches: [main, feature/background-virtual-test-v143, feature/background-audit-v144, feature/background-audit-v148, feature/background-notification-v151, feature/background-notification-v152, feature/background-notification-v153, fix/virtual-test-tl-valuation-v154, fix/plan-target-score-v158, fix/plan-stop-distance-v160, fix/plan-zone-target-rsi-v162, fix/near-term-targets-v163]
   workflow_dispatch:
 
 jobs:
