@@ -1939,6 +1939,7 @@ public class MainActivity extends Activity {
         // olarak ilk hedefe koyma.
         double[] resistanceLevels={q.resistance5,q.resistance10,q.resistance};
         double firstResistance=nearestResistanceAbove(resistanceLevels,Math.max(entry,q.price));
+        String firstResistanceWindow=resistanceWindow(q,firstResistance);
         boolean target1HasResistance=firstResistance>0;
         boolean target1AtResistance=target1HasResistance && firstResistance>=entry+risk;
         double target1=target1HasResistance
@@ -1950,11 +1951,13 @@ public class MainActivity extends Activity {
         double target2=secondResistance>0
                 ? Math.max(secondResistance,target1+0.50*atr)
                 : target1+Math.max(0.50*atr,risk);
+        String secondResistanceWindow=resistanceWindow(q,secondResistance);
         double thirdResistance=nearestResistanceAbove(resistanceLevels,target2+0.10*atr);
         boolean target3HasResistance=thirdResistance>target2+0.50*atr;
         double target3=thirdResistance>0
                 ? Math.max(thirdResistance,target2+0.50*atr)
                 : target2+Math.max(0.50*atr,risk);
+        String thirdResistanceWindow=resistanceWindow(q,thirdResistance);
         double rr=(target1-entry)/risk;
         String targetWarning = !target1HasResistance
                 ? "Uyarı: Fiyatın üzerinde yakın 5/10/20 günlük direnç bulunamadı. Hedef 1 ATR/risk bazlı yaklaşık seviyedir; doğrulanmış direnç değildir."
@@ -1973,12 +1976,25 @@ public class MainActivity extends Activity {
         else condition="Direnç aşılmış; kırılımın kalıcılığı ayrıca izlenmeli.";
 
         String unit = currencyFor(q.coin);
+        String breakoutLabel=target1AtResistance
+                ? "Gerçek direnç kırılım teyidi (H1 + %10 ATR)"
+                : target1HasResistance
+                ? "Hesaplanmış H1 üstü teyit (direnç kırılımı değildir)"
+                : "Tahmini H1 üstü teyit (gerçek direnç değildir)";
+        String target1Label=target1AtResistance
+                ? "gerçek direnç ("+firstResistanceWindow+")"
+                : target1HasResistance ? "hesaplanmış 1R alt sınırı" : "ATR/risk tahmini";
+        String target2Label=target2HasResistance
+                ? "sonraki gerçek direnç ("+secondResistanceWindow+")" : "tahmini ATR uzatımı";
+        String target3Label=target3HasResistance
+                ? "sonraki gerçek direnç ("+thirdResistanceWindow+")" : "tahmini ATR uzatımı";
         return "ALIM–SATIM PLANLAYICI ("+unit+")\\n\\n"+
                 "Alım bölgesi: "+num(entryLow, q.coin)+" – "+num(entryHigh, q.coin)+" "+unit+"\\n"+
-                "Kırılım teyidi: "+num(breakout, q.coin)+" "+unit+"\\n"+
-                "Hedef 1 ("+(target1AtResistance?"yakın direnç":(target1HasResistance?"1R alt sınırı":"ATR/risk bazlı"))+"): "+num(target1, q.coin)+" "+unit+"\\n"+
-                "Hedef 2 ("+(target2HasResistance?"sonraki direnç":"ATR uzatımı")+"): "+num(target2, q.coin)+" "+unit+"\\n"+
-                "Hedef 3 ("+(target3HasResistance?"sonraki direnç":"ATR uzatımı")+"): "+num(target3, q.coin)+" "+unit+"\\n"+
+                breakoutLabel+": "+num(breakout, q.coin)+" "+unit+"\\n"+
+                "Hedef 1 ("+target1Label+"): "+num(target1, q.coin)+" "+unit+"\\n"+
+                (target1HasResistance && !target1AtResistance ? "Gerçek en yakın direnç ("+firstResistanceWindow+"): "+num(firstResistance, q.coin)+" "+unit+"\\n" : "")+
+                "Hedef 2 ("+target2Label+"): "+num(target2, q.coin)+" "+unit+"\\n"+
+                "Hedef 3 ("+target3Label+"): "+num(target3, q.coin)+" "+unit+"\\n"+
                 "Zarar-kes: "+num(stop, q.coin)+" "+unit+"\\n"+
                 "Risk/Getiri (H1): "+String.format(Locale.US,"%.2f",rr)+"R\\n\\n"+
                 "Destek: "+num(support, q.coin)+" "+unit+"\\n"+
@@ -2061,6 +2077,15 @@ public class MainActivity extends Activity {
         value/=n;
         for(int i=n;i<ranges.size();i++) value=((value*(n-1))+ranges.get(i))/n;
         return value;
+    }
+
+    private String resistanceWindow(Quote q,double level){
+        if(level<=0) return "dönem bilinmiyor";
+        double tolerance=Math.max(Math.abs(level)*0.000001,0.00000001);
+        if(q.resistance5>0 && Math.abs(q.resistance5-level)<=tolerance) return "5 günlük tepe";
+        if(q.resistance10>0 && Math.abs(q.resistance10-level)<=tolerance) return "10 günlük tepe";
+        if(q.resistance>0 && Math.abs(q.resistance-level)<=tolerance) return "20 günlük tepe";
+        return "günlük tepe";
     }
 
     private double nearestResistanceAbove(double[] levels,double threshold){
