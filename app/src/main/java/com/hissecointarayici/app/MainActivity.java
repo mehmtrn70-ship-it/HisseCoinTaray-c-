@@ -56,6 +56,7 @@ public class MainActivity extends Activity {
     // USDT'nin TL karşılığı yaklaşık USD/TRY kuru ile hesaplanır; bu bir borsa TRY fiyatı değildir.
     private volatile double usdtTryRate = 0.0;
     private volatile long usdtTryRateUpdatedAt = 0L;
+    private volatile long usdtTryRateLastAttemptAt = 0L;
     private volatile boolean checkingUsdtTryRate = false;
     private volatile String lastUsdtTryRateError = "";
 
@@ -81,6 +82,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
+        VirtualTestBackgroundScheduler.ensureScheduled(this);
         createSignalNotificationChannel();
         buildUi();
         loadAll();
@@ -952,50 +954,64 @@ public class MainActivity extends Activity {
     private static final double VIRTUAL_TEST_PER_SIGNAL = 2000.0;
 
     private void showVirtualSignalTest() {
+        ensureBackgroundAuditNotificationPermission();
         JSONArray test;
         try { test = new JSONArray(paperPrefs().getString("virtual_signal_test", "[]")); }
         catch (Exception e) { test = new JSONArray(); }
+
+        boolean needsFxRate = false;
+        if (test.length() > 0) {
+            for (int i = 0; i < test.length(); i++) {
+                JSONObject item = test.optJSONObject(i);
+                if (item != null && item.optBoolean("coin", false)) { needsFxRate = true; break; }
+            }
+        } else if (latestScans != null) {
+            for (Scan candidate : latestScans) {
+                if (candidate != null && candidate.q != null && candidate.q.coin && candidate.q.price > 0) {
+                    needsFxRate = true;
+                    break;
+                }
+            }
+        }
+        boolean fxNeedsRefresh = usdtTryRate <= 0 || usdtTryRateUpdatedAt <= 0
+                || System.currentTimeMillis() - usdtTryRateUpdatedAt >= AUTO_REFRESH_MS;
+        if (needsFxRate && fxNeedsRefresh) {
+            if (checkingUsdtTryRate) return;
+            checkingUsdtTryRate = true;
+            final JSONArray existingTest = test;
+            final boolean hadExistingTest = test.length() > 0;
+            android.app.ProgressDialog progress = new android.app.ProgressDialog(this);
+            progress.setMessage("USDT/TL kuru güvenli kaynaklardan alınıyor...");
+            progress.setCancelable(false);
+            progress.show();
+            refreshPool.execute(() -> {
+                double rate = getUsdtTryRate();
+                runOnUiThread(() -> {
+                    checkingUsdtTryRate = false;
+                    if (isFinishing()) { if (progress.isShowing()) progress.dismiss(); return; }
+                    if (progress.isShowing()) progress.dismiss();
+                    if (rate > 0) {
+                        showVirtualSignalTest();
+                    } else if (hadExistingTest) {
+                        renderVirtualSignalTest(existingTest);
+                    } else {
+                        String detail = lastUsdtTryRateError == null || lastUsdtTryRateError.isEmpty()
+                                ? "Yahoo, Open ER API ve Frankfurter kaynaklarından geçerli kur alınamadı."
+                                : lastUsdtTryRateError;
+                        new android.app.AlertDialog.Builder(this).setTitle("Kur verisi alınamadı")
+                                .setMessage("Yeni sanal test başlatılmadı. Mevcut kayıtlar korunuyor. " + detail)
+                                .setPositiveButton("TAMAM", null).show();
+                    }
+                });
+            });
+            return;
+        }
+
         if (test.length() == 0) {
             if (latestScans == null || latestScans.isEmpty()) {
                 new android.app.AlertDialog.Builder(this).setTitle("Sanal Sinyal Testi")
                         .setMessage("Önce tam piyasa taraması yap. Test, en güçlü 5 farklı sinyali seçerek başlayacak.")
                         .setPositiveButton("TAMAM", null).show();
-                return;
-            }
-            // Resolve FX asynchronously; never perform network I/O on Android's UI thread.
-            boolean hasCryptoCandidate = false;
-            for (Scan candidate : latestScans) {
-                if (candidate != null && candidate.q != null && candidate.q.coin && candidate.q.price > 0) {
-                    hasCryptoCandidate = true;
-                    break;
-                }
-            }
-            if (hasCryptoCandidate && usdtTryRate <= 0) {
-                if (checkingUsdtTryRate) return;
-                checkingUsdtTryRate = true;
-                android.app.ProgressDialog progress = new android.app.ProgressDialog(this);
-                progress.setMessage("USDT/TL kuru güvenli bağlantıyla alınıyor...");
-                progress.setCancelable(false);
-                progress.show();
-                refreshPool.execute(() -> {
-                    double rate = getUsdtTryRate();
-                    runOnUiThread(() -> {
-                        checkingUsdtTryRate = false;
-                        if (isFinishing()) { if (progress.isShowing()) progress.dismiss(); return; }
-                        if (progress.isShowing()) progress.dismiss();
-                        if (rate > 0) {
-                            showVirtualSignalTest();
-                        } else {
-                            String detail = lastUsdtTryRateError == null || lastUsdtTryRateError.isEmpty()
-                                    ? "Üç kur kaynağından da geçerli yanıt alınamadı."
-                                    : lastUsdtTryRateError;
-                            new android.app.AlertDialog.Builder(this).setTitle("Kur verisi alınamadı")
-                                    .setMessage("USDT/TL dönüşüm kuru arka planda da alınamadı. " + detail
-                                            + "\nYeni test başlatılmadı; mevcut kayıtların korundu.")
-                                    .setPositiveButton("TAMAM", null).show();
-                        }
-                    });
-                });
                 return;
             }
             ArrayList<Scan> sorted = new ArrayList<>(latestScans);
@@ -1044,6 +1060,46 @@ public class MainActivity extends Activity {
             paperPrefs().edit().putString("virtual_signal_test", test.toString()).apply();
         }
         renderVirtualSignalTest(test);
+    }
+
+    private void ensureBackgroundAuditNotificationPermission() {
+        if (Build.VERSION.SDK_INT < 33 ||
+                checkSelfPermission("android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED) return;
+        android.content.SharedPreferences settings = getSharedPreferences("hisse_coin_paper_v1", MODE_PRIVATE);
+        if (settings.getBoolean("virtual_test_bg_notification_permission_asked", false)) return;
+        settings.edit().putBoolean("virtual_test_bg_notification_permission_asked", true).apply();
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Arka plan kontrol bildirimi")
+                .setMessage("Sanal test fiyat kontrolü uygulama kapalıyken başarılı olduğunda bildirim gösterilsin mi? Bildirim izni verilmezse fiyat kaydı yine yapılır; yalnızca bildirim gösterilemez.")
+                .setPositiveButton("İZİN VER", (dialog, which) ->
+                        requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, NOTIFICATION_PERMISSION_REQUEST))
+                .setNegativeButton("ŞİMDİ DEĞİL", null)
+                .show();
+    }
+
+    private String backgroundCaptureStatusText() {
+        android.content.SharedPreferences p = getSharedPreferences("hisse_coin_paper_v1", MODE_PRIVATE);
+        long lastAttempt = p.getLong("virtual_test_bg_last_attempt", 0L);
+        long lastSuccess = p.getLong("virtual_test_bg_last_success", 0L);
+        int count = p.getInt("virtual_test_bg_last_count", 0);
+        String error = p.getString("virtual_test_bg_last_error", "");
+        java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("dd.MM HH:mm", Locale.getDefault());
+        String successText = lastSuccess > 0 ? fmt.format(new Date(lastSuccess)) : "henüz yok";
+        String attemptText = lastAttempt > 0 ? fmt.format(new Date(lastAttempt)) : "henüz çalışmadı";
+        boolean notificationAllowed = Build.VERSION.SDK_INT < 33 ||
+                checkSelfPermission("android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED;
+        StringBuilder statusText = new StringBuilder();
+        statusText.append("Arka plan fiyat kontrolü: ")
+                .append(lastSuccess > 0 ? "son başarılı " + successText + " • " + count + " varlık" : "henüz başarılı kayıt yok")
+                .append("\nSon deneme: ").append(attemptText)
+                .append("\nBildirim izni: ").append(notificationAllowed ? "açık" : "kapalı");
+        if (!error.isEmpty()) statusText.append("\nSon kontrol uyarısı: ").append(error);
+        long notificationAt = p.getLong("virtual_test_bg_notification_last_at", 0L);
+        String detail = p.getString("virtual_test_bg_notification_last_detail", "");
+        statusText.append("\nSon bildirim kaydı: ")
+                .append(notificationAt > 0 ? fmt.format(new Date(notificationAt)) : "henüz yok");
+        if (!detail.isEmpty()) statusText.append(" • ").append(detail);
+        return statusText.toString();
     }
 
     private void updateVirtualSignalTestPrices(ArrayList<Scan> scans) {
@@ -1095,7 +1151,9 @@ public class MainActivity extends Activity {
         double totalPnlTL = 0, totalValueTL = 0, totalInvestedTL = 0;
         boolean missingCryptoRate = false;
         // One FX snapshot keeps all crypto positions on the same valuation basis.
-        double reportFxRate = getUsdtTryRate();
+        double reportFxRate = (usdtTryRateUpdatedAt > 0
+                && System.currentTimeMillis() - usdtTryRateUpdatedAt <= 12L * 60L * 60L * 1000L)
+                ? usdtTryRate : 0.0;
         int winners = 0, losers = 0;
         long start = Long.MAX_VALUE;
         for (int i = 0; i < test.length(); i++) {
@@ -1151,7 +1209,8 @@ public class MainActivity extends Activity {
                 + "Toplam K/Z: " + (missingCryptoRate ? "kur verisi yok — hesaplanamadı" : String.format(Locale.US, "%+.2f TL (yaklaşık)", totalPnlTL)) + "\n"
                 + "Tahmini portföy değeri: " + (missingCryptoRate ? "kur verisi yok — hesaplanamadı" : String.format(Locale.US, "%.2f TL (yaklaşık)", totalValueTL)) + "\n"
                 + "Kazanan / kaybeden: " + winners + " / " + losers
-                + "\n\n1g/3g/7g ölçümleri, yeterli sonraki fiyat kaydı oluşunca hesaplanır. Kripto TL karşılığı tahminidir; bu bir sanal testtir, gerçek emir gönderilmez.\n";
+                + "\n\n" + backgroundCaptureStatusText()
+                + "\n1g/3g/7g ölçümleri, yeterli sonraki fiyat kaydı oluşunca hesaplanır. Kripto TL karşılığı tahminidir; bu bir sanal testtir, gerçek emir gönderilmez.\n";
         TextView content = new TextView(this);
         content.setText(summary + report.toString());
         content.setTextSize(14);
@@ -1696,22 +1755,52 @@ public class MainActivity extends Activity {
 
     private synchronized double getUsdtTryRate() {
         long now = System.currentTimeMillis();
-        if (now - usdtTryRateUpdatedAt < AUTO_REFRESH_MS && usdtTryRateUpdatedAt > 0) return usdtTryRate;
-        usdtTryRateUpdatedAt = now;
+        if (usdtTryRateUpdatedAt > 0 && now - usdtTryRateUpdatedAt < AUTO_REFRESH_MS) return usdtTryRate;
+        if (usdtTryRateLastAttemptAt > 0 && now - usdtTryRateLastAttemptAt < 30000L) {
+            return usdtTryRateUpdatedAt > 0 && now - usdtTryRateUpdatedAt <= 12L * 60L * 60L * 1000L
+                    ? usdtTryRate : 0.0;
+        }
+        usdtTryRateLastAttemptAt = now;
+        StringBuilder errors = new StringBuilder();
         try {
             JSONObject root = getJson("https://query1.finance.yahoo.com/v8/finance/chart/USDTRY=X?interval=1d&range=1d");
             JSONObject result = root.getJSONObject("chart").getJSONArray("result").getJSONObject(0);
             double rate = result.getJSONObject("meta").optDouble("regularMarketPrice", 0.0);
-            if (rate > 0) {
-                usdtTryRate = rate;
-                lastUsdtTryRateError = "";
-            } else {
-                lastUsdtTryRateError = "USD/TRY kaynağı geçerli bir kur döndürmedi.";
-            }
+            if (rate > 0 && !Double.isNaN(rate) && !Double.isInfinite(rate)) return cacheUsdtTryRate(rate, now);
+            errors.append("Yahoo geçerli kur döndürmedi");
         } catch (Exception e) {
-            lastUsdtTryRateError = e.getClass().getSimpleName() + ": " + e.getMessage();
+            errors.append("Yahoo: ").append(e.getClass().getSimpleName()).append(" ").append(e.getMessage());
         }
-        return usdtTryRate;
+        try {
+            JSONObject root = getJson("https://open.er-api.com/v6/latest/USD");
+            double rate = root.getJSONObject("rates").optDouble("TRY", 0.0);
+            if (rate > 0 && !Double.isNaN(rate) && !Double.isInfinite(rate)) return cacheUsdtTryRate(rate, now);
+            if (errors.length() > 0) errors.append(" | ");
+            errors.append("Open ER API geçerli kur döndürmedi");
+        } catch (Exception e) {
+            if (errors.length() > 0) errors.append(" | ");
+            errors.append("Open ER API: ").append(e.getClass().getSimpleName()).append(" ").append(e.getMessage());
+        }
+        try {
+            JSONObject root = getJson("https://api.frankfurter.app/latest?from=USD&to=TRY");
+            double rate = root.getJSONObject("rates").optDouble("TRY", 0.0);
+            if (rate > 0 && !Double.isNaN(rate) && !Double.isInfinite(rate)) return cacheUsdtTryRate(rate, now);
+            if (errors.length() > 0) errors.append(" | ");
+            errors.append("Frankfurter geçerli kur döndürmedi");
+        } catch (Exception e) {
+            if (errors.length() > 0) errors.append(" | ");
+            errors.append("Frankfurter: ").append(e.getClass().getSimpleName()).append(" ").append(e.getMessage());
+        }
+        lastUsdtTryRateError = errors.toString();
+        return usdtTryRateUpdatedAt > 0 && now - usdtTryRateUpdatedAt <= 12L * 60L * 60L * 1000L
+                ? usdtTryRate : 0.0;
+    }
+
+    private double cacheUsdtTryRate(double rate, long updatedAt) {
+        usdtTryRate = rate;
+        usdtTryRateUpdatedAt = updatedAt;
+        lastUsdtTryRateError = "";
+        return rate;
     }
 
     private String estimatedTryPrice(Quote q) {
