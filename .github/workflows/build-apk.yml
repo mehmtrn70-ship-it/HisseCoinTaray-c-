@@ -4,7 +4,7 @@ name: APK Build
 
 on:
   push:
-    branches: [main, feature/background-notification-v152, feature/background-notification-v153, fix/v165-virtual-test-tl-accounting, fix/v166-restore-background-and-fx]
+    branches: [main, feature/background-notification-v152, feature/background-notification-v153, fix/v165-virtual-test-tl-accounting, fix/v166-restore-background-and-fx, fix/v171-restore-early-opportunity]
   workflow_dispatch:
 
 jobs:
