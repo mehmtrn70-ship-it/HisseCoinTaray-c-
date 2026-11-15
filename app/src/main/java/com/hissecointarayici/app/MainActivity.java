@@ -56,6 +56,8 @@ public class MainActivity extends Activity {
     // USDT'nin TL karşılığı yaklaşık USD/TRY kuru ile hesaplanır; bu bir borsa TRY fiyatı değildir.
     private volatile double usdtTryRate = 0.0;
     private volatile long usdtTryRateUpdatedAt = 0L;
+    private volatile boolean checkingUsdtTryRate = false;
+    private volatile String lastUsdtTryRateError = "";
 
     private static final String[] BIST100 = ("ASELS,TUPRS,BIMAS,THYAO,AKBNK,EREGL,YKBNK,KCHOL,ISCTR,SAHOL,TCELL,ASTOR,GARAN,CCOLA,ENKAI,SISE,TAVHL,FROTO,MGROS,SASA,TRALT,EKGYO,AEFES,MPARK,TOASO,KRDMD,PGSUS,GUBRF,HALKB,ENERY,ENJSA,TURSG,PETKM,TTKOM,GLYHO,AGHOL,TRMET,MAVI,TKFEN,VAKBN,TRGYO,OYAKC,AHGAZ,BRSAN,AKSEN,TABGD,DOHOL,ANSGR,SOKM,RGYAS,AYGAZ,ALARK,CIMSA,RYSAS,ULKER,AKSA,ISMEN,DOAS,CVKMD,OTKAR,GLRMK,TSKB,ARCLK,HEKTS,TTRAK,ISDMR,TRENJ,ALBRK,ECILC,CANTE,CWENE,ANHYT,TCKRC,BTCIM,AKFYE,SNGYO,GRSEL,ODAS,BRYAT,EGEEN,ECZYT,BERA,FENER,KCAER,ALTNY,EGGUB,LMKDC,PAHOL,ENTRA,ZOREN,OBAMS,GWIND,KARSN,KORDS,EUREN,BINHO,VESTL,KATMR,AKCNS,ALFAS").split(",");
     private static final String[] BIST_EXTRA = ("AKENR,AKFGY,AKSGY,AKYHO,ATATP,ATLAS,AVHOL,AVOD,AYDEM,AYEN,BAKAB,BANVT,BASGZ,BAYRK,BEGYO,BIGCH,BIOEN,BJKAS,BLCYT,BMSCH,BNTAS,BORLS,BRISA,BRKO,BRKSN,BRKVY,BRLSM,BRSAN,BSOKE,BUCIM,BULGS,BURCE,BURVA,CEMAS,CEMTS,CEOEM,COSMO,CRDFA,CUSAN,DAGI,TRHOL,DAPGM,DARDL,DCTTR,DERHL,DERIM,DESA,DESPC,DEVA,DITAS,DMSAS,DOBUR,DURDO,DYOBY,EDATA,EDIP,EFORC,EGPRO,EGSER,EKIZ,ELITE,EMKEL,EMNIS,ENDAE,ENSRI,ERBOS,ERCB,ERSU,ESCAR,ESCOM,ESEN,ETILR,EUPWR,EYGYO,FADE,FONET,FORMT,FORTE,FRIGO, GEDIK,GENTS,GEREL,GLBMD,GLCVY,GOODY,GRNYO,GSDDE,GSDHO,GTYGR,GUNDG,HATEK,HATSN,HDFGS,HEDEF,HKTM,HRKET,IDGYO,IEYHO,IHAAS,IHEVA,IHGZT,IHYAY,IMASM,INDES,INFO,INGRM,INTEM,INVEO,ISBIR,ISBTR,ISFIN,ISKPL,ISKUR,ISSEN,IZENR,IZFAS,IZINV,IZMDC,JANTS,KAPLM,KAREL,KARTN,KATMR,KAYSE,KENT,KERVN,KFEIN,KIMMR,KLGYO,KLKIM,KLMSN,KLNMA,KLRHO,KLSER,KLSYN,KMPUR,KNFRT,KONKA,KONTR,KONYA,KOPOL,KOTON,KRDMA,KRDMB,KRGYO,KRVGD,KSTUR,KUTPO,KUVVA,KZBGY,LIDER,LILAK,LKMNH,LOGO,LUKSK,MAALT,MACKO,MAKIM,MANAS,MARKA,MARTI,MATAS,MEDTR,MEGAP,MEGMT,MERCN,METRO,METUR,MHRGY,MIPAZ,MMCAS,MNDRS,MNDTR,MOBTL,MRGYO,MRSHL,MSGYO,MTRKS,MZHLD,NATEN,NETAS,NIBAS,NTGAZ,NUHCM,OBAMS,OBASE,ONCSM,ORGE,ORMA,OSMEN,OSTIM,OTTO,OYLUM,OZATD,OZGYO,OZKGY,OZRDN,OZSUB,OZYSR,PAGYO,PAMEL,PAPIL,PARSN,PASEU,PCILT,PEKGY,PENGD,PENTA,PETUN,PINSU,PKART,PKENT,PLTUR,PNLSN,PNSUT,POLHO,POLTK,PRDGS,PRKAB,PRKME,PRZMA,PSDTC,QNBFK,QNBTR,RALYH,RAYSG,REEDR,REKOR,RGYAS,RODRG,RTALB,RUBNS,RUZYE,RYGYO,SAMAT,SANEL,SANFM,SANKO,SARKY,SAYAS,SDTTR,SEGMN,SEKFK,SEKUR,SELEC,SELGD,SELVA,SERNT,SEYKM,SILVR,SKBNK,SKTAS,SMART,SMRTG,SMRVA,SNGYO,SNICA,SNPAM,SODSN,SONME,SRVGY,SUNTK,SURGY,SUWEN,TARKM,TATEN,TATGD,TAVHL,TBORG,TDGYO,TEKTU,TERA,TETMT,TGSAS,TKNSA,TLMAN,TMSN,TNZTP,TRCAS,TRILC,TSGYO,TSKB,TUCLK,TUKAS,TUREX,UFUK,ULAS,ULUFA,ULUSE,ULUUN,UNLU,USAK,VAKFA,VAKFN,VAKKO,VERTU,VERUS,VESBE,VKFYO,VKGYO,VKING,VRGYO,YAPRK,YATAS,YAYLA,YEOTK,YESIL,YGGYO,YIGIT,YKSLN,YUNSA,ZEDUR,ZRGYO").replace(" GEDIK","GEDIK").split(",");
@@ -960,6 +962,42 @@ public class MainActivity extends Activity {
                         .setPositiveButton("TAMAM", null).show();
                 return;
             }
+            // Resolve FX asynchronously; never perform network I/O on Android's UI thread.
+            boolean hasCryptoCandidate = false;
+            for (Scan candidate : latestScans) {
+                if (candidate != null && candidate.q != null && candidate.q.coin && candidate.q.price > 0) {
+                    hasCryptoCandidate = true;
+                    break;
+                }
+            }
+            if (hasCryptoCandidate && usdtTryRate <= 0) {
+                if (checkingUsdtTryRate) return;
+                checkingUsdtTryRate = true;
+                android.app.ProgressDialog progress = new android.app.ProgressDialog(this);
+                progress.setMessage("USDT/TL kuru güvenli bağlantıyla alınıyor...");
+                progress.setCancelable(false);
+                progress.show();
+                refreshPool.execute(() -> {
+                    double rate = getUsdtTryRate();
+                    runOnUiThread(() -> {
+                        checkingUsdtTryRate = false;
+                        if (isFinishing()) { if (progress.isShowing()) progress.dismiss(); return; }
+                        if (progress.isShowing()) progress.dismiss();
+                        if (rate > 0) {
+                            showVirtualSignalTest();
+                        } else {
+                            String detail = lastUsdtTryRateError == null || lastUsdtTryRateError.isEmpty()
+                                    ? "Üç kur kaynağından da geçerli yanıt alınamadı."
+                                    : lastUsdtTryRateError;
+                            new android.app.AlertDialog.Builder(this).setTitle("Kur verisi alınamadı")
+                                    .setMessage("USDT/TL dönüşüm kuru arka planda da alınamadı. " + detail
+                                            + "\nYeni test başlatılmadı; mevcut kayıtların korundu.")
+                                    .setPositiveButton("TAMAM", null).show();
+                        }
+                    });
+                });
+                return;
+            }
             ArrayList<Scan> sorted = new ArrayList<>(latestScans);
             sorted.sort((a, b) -> Double.compare(b.score, a.score));
             HashSet<String> used = new HashSet<>();
@@ -988,7 +1026,9 @@ public class MainActivity extends Activity {
                     item.put("horizonCaptureVersion", 1);
                     item.put("allocationTL", VIRTUAL_TEST_PER_SIGNAL);
                     double testRate = scan.q.coin ? getUsdtTryRate() : 1.0;
-                    item.put("quantity", VIRTUAL_TEST_PER_SIGNAL / ((scan.q.coin && testRate > 0 ? testRate : 1.0) * scan.q.price));
+                    if (scan.q.coin && testRate <= 0) throw new IllegalStateException("USDT/TL kuru yok; sanal miktar hesaplanamadı.");
+                    item.put("entryFxRate", testRate);
+                    item.put("quantity", VIRTUAL_TEST_PER_SIGNAL / (testRate * scan.q.price));
                     item.put("currency", currencyFor(scan.q.coin));
                     created.put(item);
                 } catch (Exception ignored) { }
@@ -1053,6 +1093,9 @@ public class MainActivity extends Activity {
     private void renderVirtualSignalTest(JSONArray test) {
         StringBuilder report = new StringBuilder();
         double totalPnlTL = 0, totalValueTL = 0, totalInvestedTL = 0;
+        boolean missingCryptoRate = false;
+        // One FX snapshot keeps all crypto positions on the same valuation basis.
+        double reportFxRate = getUsdtTryRate();
         int winners = 0, losers = 0;
         long start = Long.MAX_VALUE;
         for (int i = 0; i < test.length(); i++) {
@@ -1066,10 +1109,27 @@ public class MainActivity extends Activity {
             long time = item.optLong("time", 0);
             if (time > 0) start = Math.min(start, time);
             if (pnlNative > 0) winners++; else if (pnlNative < 0) losers++;
-            double pnlTL = coin ? pnlNative * getUsdtTryRate() : pnlNative;
-            totalPnlTL += pnlTL;
+            double pnlTL = 0;
+            String pnlTLText;
+            if (coin) {
+                if (reportFxRate <= 0 || qty <= 0) {
+                    missingCryptoRate = true;
+                    pnlTLText = "hesaplanamadı";
+                } else {
+                    // Current units are valued in TL; subtract their original TL allocation.
+                    // This includes token movement and the USDT/TRY exchange-rate movement.
+                    pnlTL = current * qty * reportFxRate - allocation;
+                    totalPnlTL += pnlTL;
+                    totalValueTL += allocation + pnlTL;
+                    pnlTLText = String.format(Locale.US, "%+.2f TL", pnlTL);
+                }
+            } else {
+                pnlTL = pnlNative;
+                totalPnlTL += pnlTL;
+                totalValueTL += allocation + pnlTL;
+                pnlTLText = String.format(Locale.US, "%+.2f TL", pnlTL);
+            }
             totalInvestedTL += allocation;
-            totalValueTL += allocation + pnlTL;
             String entryStr = formatPortfolioPrice(entry, coin) + " " + currencyFor(coin);
             String currentStr = formatPortfolioPrice(current, coin) + " " + currencyFor(coin);
             report.append("\n").append(i + 1).append(". ").append(item.optString("name"))
@@ -1077,6 +1137,7 @@ public class MainActivity extends Activity {
                     .append("\n   Alış: ").append(entryStr).append(" | Güncel: ").append(currentStr)
                     .append("\n   Değişim: ").append(String.format(Locale.US, "%+.2f%%", pct))
                     .append(" | K/Z: ").append(String.format(Locale.US, "%+.2f", pnlNative)).append(" ").append(currencyFor(coin))
+                    .append(" (").append(pnlTLText).append(")")
                     .append("\n   1g / 3g / 7g: ").append(virtualTestHorizon(item, 1)).append(" / ")
                     .append(virtualTestHorizon(item, 3)).append(" / ").append(virtualTestHorizon(item, 7)).append("\n");
         }
@@ -1087,8 +1148,8 @@ public class MainActivity extends Activity {
                 + "Dağılım: Her sinyale 2.000 TL (en fazla 5 farklı varlık)\n"
                 + "Kayıtlı sinyal: " + test.length() + "/5\n"
                 + "Geçen süre: " + elapsedText + "\n"
-                + "Toplam K/Z: " + String.format(Locale.US, "%+.2f TL (yaklaşık)", totalPnlTL) + "\n"
-                + "Tahmini portföy değeri: " + String.format(Locale.US, "%.2f TL (yaklaşık)", totalValueTL) + "\n"
+                + "Toplam K/Z: " + (missingCryptoRate ? "kur verisi yok — hesaplanamadı" : String.format(Locale.US, "%+.2f TL (yaklaşık)", totalPnlTL)) + "\n"
+                + "Tahmini portföy değeri: " + (missingCryptoRate ? "kur verisi yok — hesaplanamadı" : String.format(Locale.US, "%.2f TL (yaklaşık)", totalValueTL)) + "\n"
                 + "Kazanan / kaybeden: " + winners + " / " + losers
                 + "\n\n1g/3g/7g ölçümleri, yeterli sonraki fiyat kaydı oluşunca hesaplanır. Kripto TL karşılığı tahminidir; bu bir sanal testtir, gerçek emir gönderilmez.\n";
         TextView content = new TextView(this);
@@ -1641,8 +1702,15 @@ public class MainActivity extends Activity {
             JSONObject root = getJson("https://query1.finance.yahoo.com/v8/finance/chart/USDTRY=X?interval=1d&range=1d");
             JSONObject result = root.getJSONObject("chart").getJSONArray("result").getJSONObject(0);
             double rate = result.getJSONObject("meta").optDouble("regularMarketPrice", 0.0);
-            if (rate > 0) usdtTryRate = rate;
-        } catch (Exception ignored) { }
+            if (rate > 0) {
+                usdtTryRate = rate;
+                lastUsdtTryRateError = "";
+            } else {
+                lastUsdtTryRateError = "USD/TRY kaynağı geçerli bir kur döndürmedi.";
+            }
+        } catch (Exception e) {
+            lastUsdtTryRateError = e.getClass().getSimpleName() + ": " + e.getMessage();
+        }
         return usdtTryRate;
     }
 
