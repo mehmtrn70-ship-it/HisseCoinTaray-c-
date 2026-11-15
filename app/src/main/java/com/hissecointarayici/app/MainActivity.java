@@ -1766,7 +1766,7 @@ public class MainActivity extends Activity {
             JSONObject root = getJson("https://query1.finance.yahoo.com/v8/finance/chart/USDTRY=X?interval=1d&range=1d");
             JSONObject result = root.getJSONObject("chart").getJSONArray("result").getJSONObject(0);
             double rate = result.getJSONObject("meta").optDouble("regularMarketPrice", 0.0);
-            if (rate > 0 && Double.isFinite(rate)) return cacheUsdtTryRate(rate, now);
+            if (rate > 0 && !Double.isNaN(rate) && !Double.isInfinite(rate)) return cacheUsdtTryRate(rate, now);
             errors.append("Yahoo geçerli kur döndürmedi");
         } catch (Exception e) {
             errors.append("Yahoo: ").append(e.getClass().getSimpleName()).append(" ").append(e.getMessage());
@@ -1774,7 +1774,7 @@ public class MainActivity extends Activity {
         try {
             JSONObject root = getJson("https://open.er-api.com/v6/latest/USD");
             double rate = root.getJSONObject("rates").optDouble("TRY", 0.0);
-            if (rate > 0 && Double.isFinite(rate)) return cacheUsdtTryRate(rate, now);
+            if (rate > 0 && !Double.isNaN(rate) && !Double.isInfinite(rate)) return cacheUsdtTryRate(rate, now);
             if (errors.length() > 0) errors.append(" | ");
             errors.append("Open ER API geçerli kur döndürmedi");
         } catch (Exception e) {
@@ -1784,7 +1784,7 @@ public class MainActivity extends Activity {
         try {
             JSONObject root = getJson("https://api.frankfurter.app/latest?from=USD&to=TRY");
             double rate = root.getJSONObject("rates").optDouble("TRY", 0.0);
-            if (rate > 0 && Double.isFinite(rate)) return cacheUsdtTryRate(rate, now);
+            if (rate > 0 && !Double.isNaN(rate) && !Double.isInfinite(rate)) return cacheUsdtTryRate(rate, now);
             if (errors.length() > 0) errors.append(" | ");
             errors.append("Frankfurter geçerli kur döndürmedi");
         } catch (Exception e) {
