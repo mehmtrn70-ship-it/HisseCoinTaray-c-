@@ -136,20 +136,49 @@ public class EarlyOpportunityActivity extends Activity {
         boolean divergence=positiveRsiDivergence(a.close);
         double resistance=highest(a.high,Math.max(0,n-21),n-1);
         double resistanceDistance=resistance>0?(resistance/last-1)*100:999;
-        double momentumRecovery=(rsi15>=42 && rsi15<=62 && rsi15>rsi(a.close.subList(0,n-5)))?1:0;
+        double rsi1hPrevious=rsi(b.close.subList(0,b.close.size()-5));
+        boolean hourlyRsiRising=rsi1h>=rsi1hPrevious+1.0;
+        double last1h=b.close.get(b.close.size()-1);
+        double sma20=sma(b.close,20), sma50=sma(b.close,50);
 
-        double score=0;
-        if(nearSupport) score+=20;
-        if(hammer) score+=14;
-        if(engulf) score+=17;
-        if(morning) score+=16;
-        if(divergence) score+=18;
-        if(vol15>=1.25) score+=Math.min(10,(vol15-1)*5);
-        if(vol1h>=1.15) score+=Math.min(5,(vol1h-1)*3);
-        if(momentumRecovery>0) score+=5;
-        if(resistanceDistance>=0 && resistanceDistance<=1.5) score+=5;
-        if(rsi15>75 || rsi1h>75) score-=8;
+        // Şeffaf 100 puan: saatlik momentum 20, hacim uyumu 20, seviye 20,
+        // trend 15, dönüş teyidi 15, risk/ödül 10.
+        int hourlyPoints = rsi1h>=55 && hourlyRsiRising ? 20
+                : rsi1h>=50 && hourlyRsiRising ? 17
+                : rsi1h>=50 ? 13
+                : rsi1h>=45 && hourlyRsiRising ? 10
+                : rsi1h>=40 ? 5 : 0;
+
+        int volumePoints = vol15>=1.5 && vol1h>=1.5 ? 20
+                : vol15>=1.2 && vol1h>=1.2 ? 16
+                : vol1h>=1.2 ? 12
+                : vol15>=1.5 ? 7
+                : vol15>=1.2 ? 4 : 0;
+
+        int levelPoints = supportDistance>=0 && supportDistance<=1.0 ? 10
+                : nearSupport ? 6 : 0;
+        if(resistanceDistance>=2.0) levelPoints+=10;
+        else if(resistanceDistance>=1.0) levelPoints+=7;
+        else if(resistanceDistance>=0.5) levelPoints+=4;
+        else if(resistanceDistance<0 && vol1h>=1.2 && rsi1h>=50) levelPoints+=6;
+        else if(resistanceDistance<0) levelPoints+=2;
+        levelPoints=Math.min(20,levelPoints);
+
+        int trendPoints = last1h>sma20 && sma20>sma50 ? 15
+                : last1h>sma20 ? 10
+                : sma20>sma50 ? 8 : 0;
+
+        int patternPoints = (divergence?8:0) + ((hammer||engulf||morning)?7:0);
+        boolean breakoutCandidate=resistanceDistance<0 && vol1h>=1.2 && rsi1h>=50;
+        double rewardRisk = supportDistance>0 ? resistanceDistance/supportDistance : 0;
+        int riskRewardPoints = resistanceDistance<0
+                ? (breakoutCandidate?8:0)
+                : rewardRisk>=2.0?10:rewardRisk>=1.5?7:rewardRisk>=1.0?4:0;
+
+        double score=hourlyPoints+volumePoints+levelPoints+trendPoints+patternPoints+riskRewardPoints;
         score=Math.max(0,Math.min(100,score));
+        boolean confirmed = rsi1h>=50 && rsi15>=50 && hourlyRsiRising
+                && vol1h>=1.2 && (last1h>sma20 || breakoutCandidate);
 
         StringBuilder reasons=new StringBuilder();
         if(nearSupport) reasons.append("Desteğe yakın • ");
@@ -157,13 +186,17 @@ public class EarlyOpportunityActivity extends Activity {
         if(engulf) reasons.append("Boğa yutan • ");
         if(morning) reasons.append("Sabah yıldızı • ");
         if(divergence) reasons.append("Pozitif RSI uyumsuzluğu • ");
-        if(vol15>=1.25) reasons.append("15dk hacim artışı • ");
-        if(vol1h>=1.15) reasons.append("1s hacim artışı • ");
-        if(momentumRecovery>0) reasons.append("Momentum toparlanıyor • ");
-        if(reasons.length()==0) reasons.append("Belirgin dönüş teyidi yok; yalnızca izleme adayı");
-        String category=score>=65?"ALIM BÖLGESİ ADAYI":score>=40?"İZLEME LİSTESİ":"ZAYIF ADAY";
+        if(vol15>=1.2) reasons.append("15dk hacim artışı • ");
+        if(vol1h>=1.2) reasons.append("1s hacim artışı • ");
+        if(hourlyRsiRising) reasons.append("Saatlik RSI yükseliyor • ");
+        if(!confirmed) reasons.append("Alım teyidi bekleniyor • ");
+        reasons.append("\nPuan katkısı: RSI "+hourlyPoints+"/20 • Hacim "+volumePoints+"/20 • Seviye "+levelPoints+"/20")
+                .append(" • Trend "+trendPoints+"/15 • Dönüş "+patternPoints+"/15 • Risk/ödül "+riskRewardPoints+"/10");
+        String category=confirmed?"ALIM TEYİDİ • KOŞULLAR SAĞLANDI"
+                :score>=60?"ERKEN FIRSAT • TEYİT BEKLİYOR"
+                :score>=40?"İZLEME LİSTESİ":"ZAYIF ADAY";
         return new Candidate(symbol,last,ticker.optDouble("priceChangePercent",0),vol15,vol1h,
-            rsi15,rsi1h,supportDistance,resistanceDistance,score,category,reasons.toString());
+            rsi15,rsi1h,supportDistance,resistanceDistance,score,category,confirmed,reasons.toString());
     }
 
     private Series parse(JSONArray rows) throws Exception {
@@ -201,6 +234,12 @@ public class EarlyOpportunityActivity extends Activity {
         int n=c.size(); if(n<15)return 50;
         double g=0,l=0; for(int i=n-14;i<n;i++){double d=c.get(i)-c.get(i-1);if(d>0)g+=d;else l-=d;}
         if(l==0)return 100; double rs=g/l; return 100-100/(1+rs);
+    }
+    private double sma(List<Double> values,int period) {
+        if(values.size()<period)return 0;
+        double total=0;
+        for(int i=values.size()-period;i<values.size();i++)total+=values.get(i);
+        return total/period;
     }
     private boolean isHammer(Series s,int i) {
         double o=s.open.get(i),c=s.close.get(i),h=s.high.get(i),l=s.low.get(i);
@@ -271,6 +310,21 @@ public class EarlyOpportunityActivity extends Activity {
             SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
             JSONArray old=new JSONArray(p.getString(HISTORY,"[]"));
             long now=System.currentTimeMillis();
+            int one=p.getInt("measured_1d_total",0);
+            int three=p.getInt("measured_3d_total",0);
+            int seven=p.getInt("measured_7d_total",0);
+            boolean initialized=p.getBoolean("measurement_totals_initialized",false);
+            // İlk açılışta eldeki ölçümleri sayaçlara aktar; sonraki kayıt silinmeleri toplamı azaltmaz.
+            if(!initialized) {
+                for(int i=0;i<old.length();i++) {
+                    JSONObject r=old.optJSONObject(i);
+                    if(r==null)continue;
+                    if(r.has("p1"))one++;
+                    if(r.has("p3"))three++;
+                    if(r.has("p7"))seven++;
+                }
+                initialized=true;
+            }
             for(int i=0;i<old.length();i++) {
                 JSONObject r=old.getJSONObject(i);
                 Double price=live.get(r.optString("symbol"));
@@ -278,19 +332,37 @@ public class EarlyOpportunityActivity extends Activity {
                 long age=now-r.optLong("time");
                 double base=r.optDouble("price",0);
                 if(base<=0) continue;
-                if(age>=86400000L && !r.has("p1")) r.put("p1",(price/base-1)*100);
-                if(age>=259200000L && !r.has("p3")) r.put("p3",(price/base-1)*100);
-                if(age>=604800000L && !r.has("p7")) r.put("p7",(price/base-1)*100);
+                if(age>=86400000L && !r.has("p1")) {
+                    r.put("p1",(price/base-1)*100); r.put("p1At",now); one++;
+                }
+                if(age>=259200000L && !r.has("p3")) {
+                    r.put("p3",(price/base-1)*100); r.put("p3At",now); three++;
+                }
+                if(age>=604800000L && !r.has("p7")) {
+                    r.put("p7",(price/base-1)*100); r.put("p7At",now); seven++;
+                }
             }
-            p.edit().putString(HISTORY,old.toString()).apply();
+            p.edit().putString(HISTORY,old.toString())
+                    .putInt("measured_1d_total",one).putInt("measured_3d_total",three)
+                    .putInt("measured_7d_total",seven)
+                    .putBoolean("measurement_totals_initialized",initialized).commit();
         } catch(Exception ignored) {}
     }
     private void updateHistoryLabel() {
         try {
-            JSONArray a=new JSONArray(getSharedPreferences(PREFS,MODE_PRIVATE).getString(HISTORY,"[]"));
-            int one=0,three=0,seven=0;
-            for(int i=0;i<a.length();i++){JSONObject r=a.getJSONObject(i);if(r.has("p1"))one++;if(r.has("p3"))three++;if(r.has("p7"))seven++;}
-            historyStatus.setText("Kayıtlı erken sinyal: "+a.length()+" • Ölçülen 1g/3g/7g: "+one+"/"+three+"/"+seven);
+            SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
+            JSONArray a=new JSONArray(p.getString(HISTORY,"[]"));
+            int one=p.getInt("measured_1d_total",-1);
+            int three=p.getInt("measured_3d_total",-1);
+            int seven=p.getInt("measured_7d_total",-1);
+            if(one<0 || three<0 || seven<0) {
+                one=0;three=0;seven=0;
+                for(int i=0;i<a.length();i++) {
+                    JSONObject r=a.optJSONObject(i);if(r==null)continue;
+                    if(r.has("p1"))one++;if(r.has("p3"))three++;if(r.has("p7"))seven++;
+                }
+            }
+            historyStatus.setText("Kayıtlı son sinyal: "+a.length()+" • Ölçülen toplam 1g/3g/7g: "+one+"/"+three+"/"+seven);
         } catch(Exception e) { historyStatus.setText("Sinyal ölçüm kayıtları hazırlanıyor."); }
     }
     private String safe(String s){return s==null?"Bilinmeyen hata":s;}
@@ -312,7 +384,8 @@ public class EarlyOpportunityActivity extends Activity {
             +"\nRSI: 15dk "+String.format(Locale.US,"%.1f",c.rsi15)+" • 1s "+String.format(Locale.US,"%.1f",c.rsi1h)
             +"\nSon dip desteğine mesafe: "+String.format(Locale.US,"%.2f%%",c.supportDistance)
             +"\nYakın dirence mesafe: "+String.format(Locale.US,"%.2f%%",c.resistanceDistance)
-            +"\nNedenler: "+c.reasons);
+            +"\nAlım teyidi: "+(c.confirmed?"EVET":"BEKLENİYOR")
+            +"\nNedenler ve puan dağılımı: "+c.reasons);
         detail.setTextColor(Color.rgb(65,72,82));detail.setPadding(0,6,0,0);card.addView(detail);
     }
     @Override protected void onDestroy(){workers.shutdownNow();super.onDestroy();}
@@ -323,8 +396,9 @@ public class EarlyOpportunityActivity extends Activity {
     static class Candidate {
         String symbol,category,reasons;
         double price,dayChange,vol15,vol1h,rsi15,rsi1h,supportDistance,resistanceDistance,score;
-        Candidate(String s,double p,double d,double v15,double v1,double r15,double r1,double sup,double res,double sc,String cat,String why){
-            symbol=s;price=p;dayChange=d;vol15=v15;vol1h=v1;rsi15=r15;rsi1h=r1;supportDistance=sup;resistanceDistance=res;score=sc;category=cat;reasons=why;
+        boolean confirmed;
+        Candidate(String s,double p,double d,double v15,double v1,double r15,double r1,double sup,double res,double sc,String cat,boolean isConfirmed,String why){
+            symbol=s;price=p;dayChange=d;vol15=v15;vol1h=v1;rsi15=r15;rsi1h=r1;supportDistance=sup;resistanceDistance=res;score=sc;category=cat;confirmed=isConfirmed;reasons=why;
         }
     }
 }
