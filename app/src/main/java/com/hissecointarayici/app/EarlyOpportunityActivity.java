@@ -376,7 +376,7 @@ public class EarlyOpportunityActivity extends Activity {
         head.setText(rank+". "+c.symbol+"   •   "+String.format(Locale.US,"%.0f/100",c.score));
         head.setTextSize(18);head.setTypeface(Typeface.DEFAULT,Typeface.BOLD);head.setTextColor(Color.rgb(25,65,105));card.addView(head);
         TextView category=new TextView(this);category.setText(c.category);category.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        category.setTextColor(c.score>=65?Color.rgb(20,125,75):Color.rgb(175,105,25));card.addView(category);
+        category.setTextColor(c.confirmed?Color.rgb(20,125,75):Color.rgb(175,105,25));card.addView(category);
         TextView detail=new TextView(this);
         detail.setText("Fiyat: "+String.format(Locale.US,"%.8f",c.price)+" USDT"
             +"\n24s değişim: "+String.format(Locale.US,"%+.2f%%",c.dayChange)
