@@ -27,8 +27,17 @@ public class EarlyOpportunityActivity extends Activity {
         super.onCreate(state);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(18,18,18,18);
+        final int pagePadding = dp(18);
+        root.setPadding(pagePadding,pagePadding,pagePadding,pagePadding);
         root.setBackgroundColor(Color.rgb(247,248,250));
+        // Android sistem cubuklarinin icerikle cakismasini onle.
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            int topInset = insets.getSystemWindowInsetTop();
+            int bottomInset = insets.getSystemWindowInsetBottom();
+            root.setPadding(pagePadding, pagePadding + topInset,
+                    pagePadding, pagePadding + bottomInset);
+            return insets;
+        });
         TextView title = new TextView(this);
         title.setText("ERKEN FIRSAT AVCISI");
         title.setTextSize(23); title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
@@ -48,7 +57,11 @@ public class EarlyOpportunityActivity extends Activity {
         status = new TextView(this); status.setText("Tarama başlatılmaya hazır.");
         status.setPadding(4,12,4,12); root.addView(status);
         ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setClipToPadding(false);
         results = new LinearLayout(this); results.setOrientation(LinearLayout.VERTICAL);
+        results.setPadding(0,0,0,dp(28));
+        results.setClipToPadding(false);
         scroll.addView(results); root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
         scan.setOnClickListener(v -> startScan());
@@ -364,6 +377,9 @@ public class EarlyOpportunityActivity extends Activity {
             }
             historyStatus.setText("Kayıtlı son sinyal: "+a.length()+" • Ölçülen toplam 1g/3g/7g: "+one+"/"+three+"/"+seven);
         } catch(Exception e) { historyStatus.setText("Sinyal ölçüm kayıtları hazırlanıyor."); }
+    }
+    private int dp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
     private String safe(String s){return s==null?"Bilinmeyen hata":s;}
     private void addMessage(String msg){TextView t=new TextView(this);t.setText(msg);t.setPadding(12,18,12,18);results.addView(t);}
