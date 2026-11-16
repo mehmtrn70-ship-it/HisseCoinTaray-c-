@@ -59,10 +59,17 @@ public class EarlyOpportunityActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.setClipToPadding(false);
+        scroll.setVerticalScrollBarEnabled(true);
+        // Alt gezinme cubugu ve son kartin altinda kaydirma payi birak.
+        scroll.setPadding(0,0,0,dp(64));
         results = new LinearLayout(this); results.setOrientation(LinearLayout.VERTICAL);
-        results.setPadding(0,0,0,dp(28));
+        results.setPadding(0,0,0,dp(48));
         results.setClipToPadding(false);
-        scroll.addView(results); root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        results.setClipChildren(false);
+        scroll.addView(results);
+        root.setClipToPadding(false);
+        root.setClipChildren(false);
+        root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
         scan.setOnClickListener(v -> startScan());
         startScan();
