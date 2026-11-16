@@ -25,6 +25,7 @@ public class EarlyOpportunityActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        EarlyOpportunityValidationScheduler.ensureScheduled(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         final int pagePadding = dp(18);
@@ -474,9 +475,18 @@ public class EarlyOpportunityActivity extends Activity {
                 if(j>0) counts.append("/");
                 counts.append(measured[j]);
             }
+            long bgAt=p.getLong("validation_bg_last_success",0L);
+            String bgText=bgAt>0
+                ? new java.text.SimpleDateFormat("dd.MM HH:mm",Locale.getDefault()).format(new java.util.Date(bgAt))
+                : "henüz çalışmadı";
+            int bgUpdated=p.getInt("validation_bg_last_updated",0);
+            int bgFailed=p.getInt("validation_bg_last_failed",0);
+            String bgError=p.getString("validation_bg_last_error","");
             historyStatus.setText("Eski kayıt: "+legacy.length()
                 +" • Yeni teyitli sinyal: "+validated.length()
-                +"\nÖlçülen 1s/4s/24s/3g/7g: "+counts);
+                +"\nÖlçülen 1s/4s/24s/3g/7g: "+counts
+                +"\nArka plan son başarı: "+bgText+" • Yeni ölçüm: "+bgUpdated+" • Fiyat hatası: "+bgFailed
+                +(bgError.isEmpty()?"":"\nDurum: "+bgError));
         } catch(Exception e) { historyStatus.setText("Sinyal ölçüm kayıtları hazırlanıyor."); }
     }
     private int dp(float value) {
