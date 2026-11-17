@@ -386,73 +386,76 @@ public class EarlyOpportunityActivity extends Activity {
 
     private void recordAndMeasureConfirmedSignals(List<Candidate> found,
             Map<String,Double> live, long snapshotAt) {
-        try {
-            SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
-            JSONArray records=new JSONArray(p.getString(VALIDATION_HISTORY,"[]"));
-            // Önce daha önce kaydedilmiş sinyallerin vadesi gelen ölçümlerini yap.
-            for(int i=0;i<records.length();i++) {
-                JSONObject r=records.optJSONObject(i);
-                if(r==null) continue;
-                Double current=live.get(r.optString("symbol"));
-                if(current==null || current<=0) continue;
-                long entryAt=r.optLong("entryAt",0L);
-                double entry=r.optDouble("entryPrice",0);
-                if(entryAt<=0 || entry<=0) continue;
-                long age=Math.max(0L,snapshotAt-entryAt);
-                for(int j=0;j<VALIDATION_TARGETS.length;j++) {
-                    String key=VALIDATION_KEYS[j];
-                    if(r.has(key) || r.optBoolean(key+"_missed",false)) continue;
-                    long target=VALIDATION_TARGETS[j];
-                    if(age>=target && age<=target+VALIDATION_GRACE[j]) {
-                        JSONObject m=new JSONObject();
-                        m.put("price",current);
-                        m.put("returnPct",(current/entry-1.0)*100.0);
-                        m.put("measuredAt",snapshotAt);
-                        m.put("elapsedMs",age);
-                        r.put(key,m);
-                    } else if(age>target+VALIDATION_GRACE[j]) {
-                        r.put(key+"_missed",true);
-                        r.put(key+"_missedAt",snapshotAt);
+        synchronized (EarlyOpportunityActivity.class) {
+            try {
+                SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
+                JSONArray records=new JSONArray(p.getString(VALIDATION_HISTORY,"[]"));
+                for(int i=0;i<records.length();i++) {
+                    JSONObject r=records.optJSONObject(i);
+                    if(r==null) continue;
+                    Double current=live.get(r.optString("symbol"));
+                    if(current==null || current<=0) continue;
+                    long entryAt=r.optLong("entryAt",0L);
+                    double entry=r.optDouble("entryPrice",0);
+                    if(entryAt<=0 || entry<=0) continue;
+                    long age=snapshotAt-entryAt;
+                    if(age<0) continue;
+                    for(int j=0;j<VALIDATION_TARGETS.length;j++) {
+                        String key=VALIDATION_KEYS[j];
+                        if(r.has(key)) continue;
+                        // Re-open old missed checkpoints; the actual elapsed time is retained.
+                        r.remove(key+"_missed");
+                        r.remove(key+"_missedAt");
+                        if(age>=VALIDATION_TARGETS[j]) {
+                            JSONObject m=new JSONObject();
+                            m.put("price",current);
+                            m.put("returnPct",(current/entry-1.0)*100.0);
+                            m.put("measuredAt",snapshotAt);
+                            m.put("elapsedMs",age);
+                            m.put("targetMs",VALIDATION_TARGETS[j]);
+                            m.put("delayMs",Math.max(0L,age-VALIDATION_TARGETS[j]));
+                            m.put("late",age>VALIDATION_TARGETS[j]+VALIDATION_GRACE[j]);
+                            m.put("source","Binance ticker lastPrice; app capture time");
+                            r.put(key,m);
+                        }
                     }
                 }
-            }
-            // Yalnızca teyit koşulları sağlanan sinyaller yeni doğrulama kohortuna alınır.
-            for(Candidate candidate:found) {
-                if(!candidate.confirmed) continue;
-                Double entryPrice=live.get(candidate.symbol);
-                if(entryPrice==null || entryPrice<=0) continue;
-                boolean duplicate=false;
-                for(int i=records.length()-1;i>=0;i--) {
-                    JSONObject prior=records.optJSONObject(i);
-                    if(prior==null || !candidate.symbol.equals(prior.optString("symbol"))) continue;
-                    long priorAt=prior.optLong("entryAt",0L);
-                    if(snapshotAt>=priorAt && snapshotAt-priorAt<DUPLICATE_WINDOW) {
-                        duplicate=true; break;
+                for(Candidate candidate:found) {
+                    if(!candidate.confirmed) continue;
+                    Double entryPrice=live.get(candidate.symbol);
+                    if(entryPrice==null || entryPrice<=0) continue;
+                    boolean duplicate=false;
+                    for(int i=records.length()-1;i>=0;i--) {
+                        JSONObject prior=records.optJSONObject(i);
+                        if(prior==null || !candidate.symbol.equals(prior.optString("symbol"))) continue;
+                        long priorAt=prior.optLong("entryAt",0L);
+                        if(snapshotAt>=priorAt && snapshotAt-priorAt<DUPLICATE_WINDOW) {
+                            duplicate=true; break;
+                        }
                     }
+                    if(duplicate) continue;
+                    JSONObject r=new JSONObject();
+                    r.put("schema","signal-validation-v1");
+                    r.put("symbol",candidate.symbol);
+                    r.put("entryPrice",entryPrice);
+                    r.put("entryAt",snapshotAt);
+                    r.put("score",candidate.score);
+                    r.put("rsi15",candidate.rsi15);
+                    r.put("rsi1h",candidate.rsi1h);
+                    r.put("vol15",candidate.vol15);
+                    r.put("vol1h",candidate.vol1h);
+                    r.put("supportDistance",candidate.supportDistance);
+                    r.put("resistanceDistance",candidate.resistanceDistance);
+                    r.put("confirmation",true);
+                    r.put("entryPriceSource","Binance 24hr ticker lastPrice");
+                    records.put(r);
                 }
-                if(duplicate) continue;
-                JSONObject r=new JSONObject();
-                r.put("schema","signal-validation-v1");
-                r.put("symbol",candidate.symbol);
-                r.put("entryPrice",entryPrice);
-                r.put("entryAt",snapshotAt);
-                r.put("score",candidate.score);
-                r.put("rsi15",candidate.rsi15);
-                r.put("rsi1h",candidate.rsi1h);
-                r.put("vol15",candidate.vol15);
-                r.put("vol1h",candidate.vol1h);
-                r.put("supportDistance",candidate.supportDistance);
-                r.put("resistanceDistance",candidate.resistanceDistance);
-                r.put("confirmation",true);
-                r.put("entryPriceSource","Binance 24hr ticker lastPrice");
-                records.put(r);
-            }
-            // Kayıt boyutunu sınırlı tut; en yeni 1000 doğrulama kaydı saklanır.
-            JSONArray kept=new JSONArray();
-            int start=Math.max(0,records.length()-1000);
-            for(int i=start;i<records.length();i++) kept.put(records.getJSONObject(i));
-            p.edit().putString(VALIDATION_HISTORY,kept.toString()).commit();
-        } catch(Exception ignored) { }
+                JSONArray kept=new JSONArray();
+                int keepStart=Math.max(0,records.length()-1000);
+                for(int i=keepStart;i<records.length();i++) kept.put(records.getJSONObject(i));
+                p.edit().putString(VALIDATION_HISTORY,kept.toString()).commit();
+            } catch(Exception ignored) { }
+        }
     }
 
     private void updateHistoryLabel() {
@@ -462,11 +465,16 @@ public class EarlyOpportunityActivity extends Activity {
             JSONArray validated=new JSONArray(p.getString(VALIDATION_HISTORY,"[]"));
             int[] measured=new int[VALIDATION_KEYS.length];
             int[] missed=new int[VALIDATION_KEYS.length];
+            int lateMeasurements=0;
             for(int i=0;i<validated.length();i++) {
                 JSONObject r=validated.optJSONObject(i);
                 if(r==null) continue;
                 for(int j=0;j<VALIDATION_KEYS.length;j++) {
-                    if(r.has(VALIDATION_KEYS[j])) measured[j]++;
+                    JSONObject checkpoint=r.optJSONObject(VALIDATION_KEYS[j]);
+                    if(checkpoint!=null) {
+                        measured[j]++;
+                        if(checkpoint.optBoolean("late",false)) lateMeasurements++;
+                    }
                     if(r.optBoolean(VALIDATION_KEYS[j]+"_missed",false)) missed[j]++;
                 }
             }
@@ -485,6 +493,7 @@ public class EarlyOpportunityActivity extends Activity {
             historyStatus.setText("Eski kayıt: "+legacy.length()
                 +" • Yeni teyitli sinyal: "+validated.length()
                 +"\nÖlçülen 1s/4s/24s/3g/7g: "+counts
+                +" • Gecikmeli ölçüm: "+lateMeasurements
                 +"\nArka plan son başarı: "+bgText+" • Yeni ölçüm: "+bgUpdated+" • Fiyat hatası: "+bgFailed
                 +(bgError.isEmpty()?"":"\nDurum: "+bgError));
         } catch(Exception e) { historyStatus.setText("Sinyal ölçüm kayıtları hazırlanıyor."); }
