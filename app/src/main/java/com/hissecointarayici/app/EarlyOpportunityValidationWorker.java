@@ -28,6 +28,7 @@ public class EarlyOpportunityValidationWorker extends Worker {
         60L*60L*1000L, 4L*60L*60L*1000L, 24L*60L*60L*1000L,
         3L*24L*60L*60L*1000L, 7L*24L*60L*60L*1000L
     };
+    // Grace is now used only to label a measurement as late, never to discard it.
     private static final long[] GRACE = {
         20L*60L*1000L, 30L*60L*1000L, 2L*60L*60L*1000L,
         6L*60L*60L*1000L, 12L*60L*60L*1000L
@@ -44,14 +45,14 @@ public class EarlyOpportunityValidationWorker extends Worker {
         long attemptAt = System.currentTimeMillis();
         prefs.edit().putLong(LAST_ATTEMPT, attemptAt).commit();
 
-        JSONArray records;
+        JSONArray initial;
         try {
-            records = new JSONArray(prefs.getString(HISTORY_KEY, "[]"));
+            initial = new JSONArray(prefs.getString(HISTORY_KEY, "[]"));
         } catch (Exception e) {
             saveFailure(prefs, 0, 0, "Doğrulama kayıtları okunamadı");
             return Result.failure();
         }
-        if (records.length() == 0) {
+        if (initial.length() == 0) {
             prefs.edit().putInt(LAST_UPDATED, 0).putInt(LAST_FAILED, 0)
                     .putString(LAST_ERROR, "Henüz teyitli sinyal kaydı yok").commit();
             return Result.success();
@@ -61,65 +62,89 @@ public class EarlyOpportunityValidationWorker extends Worker {
         try {
             quotes = fetchAllBinanceQuotes();
         } catch (Exception e) {
-            saveFailure(prefs, 0, records.length(), safeMessage(e));
+            saveFailure(prefs, 0, initial.length(), safeMessage(e));
             return Result.retry();
         }
 
         long completedAt = System.currentTimeMillis();
         int measured = 0;
-        int missed = 0;
-        int waiting = 0;
         int missingPrice = 0;
-        try {
-            for (int i = 0; i < records.length(); i++) {
-                JSONObject record = records.optJSONObject(i);
-                if (record == null) continue;
-                String symbol = record.optString("symbol", "");
-                Quote quote = quotes.get(symbol);
-                long entryAt = record.optLong("entryAt", 0L);
-                double entry = record.optDouble("entryPrice", 0.0);
-                if (entryAt <= 0 || entry <= 0) continue;
-                if (quote == null || quote.price <= 0 || quote.timestamp <= 0) {
-                    missingPrice++;
-                    continue;
-                }
-                long age = quote.timestamp - entryAt;
-                if (age < 0) continue;
-                for (int j = 0; j < TARGETS.length; j++) {
-                    String key = KEYS[j];
-                    if (record.has(key) || record.optBoolean(key + "_missed", false)) continue;
-                    if (age >= TARGETS[j] && age <= TARGETS[j] + GRACE[j]) {
-                        JSONObject checkpoint = new JSONObject();
-                        checkpoint.put("price", quote.price);
-                        checkpoint.put("returnPct", (quote.price / entry - 1.0) * 100.0);
-                        checkpoint.put("measuredAt", quote.timestamp);
-                        checkpoint.put("elapsedMs", age);
-                        checkpoint.put("delayMs", Math.max(0L, age - TARGETS[j]));
-                        checkpoint.put("source", "Binance ticker closeTime");
-                        record.put(key, checkpoint);
-                        measured++;
-                    } else if (age > TARGETS[j] + GRACE[j]) {
-                        record.put(key + "_missed", true);
-                        record.put(key + "_missedAt", completedAt);
-                        missed++;
-                    } else {
-                        waiting++;
+        int pending = 0;
+        int missed = 0;
+        boolean saved;
+
+        // Foreground scanner and background worker share this lock and the same JSON store.
+        synchronized (EarlyOpportunityActivity.class) {
+            try {
+                // Re-read after the network request so newer foreground records are not overwritten.
+                JSONArray records = new JSONArray(prefs.getString(HISTORY_KEY, "[]"));
+                for (int i = 0; i < records.length(); i++) {
+                    JSONObject record = records.optJSONObject(i);
+                    if (record == null) continue;
+                    long entryAt = record.optLong("entryAt", 0L);
+                    double entry = record.optDouble("entryPrice", 0.0);
+                    if (entryAt <= 0 || entry <= 0) continue;
+
+                    long age = completedAt - entryAt;
+                    if (age < 0) continue;
+                    String symbol = record.optString("symbol", "");
+                    Quote quote = quotes.get(symbol);
+                    boolean hasPrice = quote != null && quote.price > 0
+                            && !Double.isNaN(quote.price) && !Double.isInfinite(quote.price);
+                    if (!hasPrice) missingPrice++;
+
+                    for (int j = 0; j < TARGETS.length; j++) {
+                        String key = KEYS[j];
+                        if (record.has(key)) continue;
+
+                        // Re-open old missed checkpoints; they can now be measured late with
+                        // their true elapsed time instead of being permanently discarded.
+                        record.remove(key + "_missed");
+                        record.remove(key + "_missedAt");
+
+                        if (age >= TARGETS[j] && hasPrice) {
+                            JSONObject checkpoint = new JSONObject();
+                            checkpoint.put("price", quote.price);
+                            checkpoint.put("returnPct", (quote.price / entry - 1.0) * 100.0);
+                            checkpoint.put("measuredAt", completedAt);
+                            checkpoint.put("elapsedMs", age);
+                            checkpoint.put("targetMs", TARGETS[j]);
+                            checkpoint.put("delayMs", Math.max(0L, age - TARGETS[j]));
+                            checkpoint.put("late", age > TARGETS[j] + GRACE[j]);
+                            checkpoint.put("exchangeCloseTime", quote.closeTime);
+                            checkpoint.put("source", "Binance ticker lastPrice; app capture time");
+                            record.put(key, checkpoint);
+                            measured++;
+                        }
                     }
                 }
+
+                // These are cumulative outstanding checkpoints, not just changes in this run.
+                for (int i = 0; i < records.length(); i++) {
+                    JSONObject record = records.optJSONObject(i);
+                    if (record == null) continue;
+                    for (String key : KEYS) {
+                        if (record.has(key)) continue;
+                        if (record.optBoolean(key + "_missed", false)) missed++;
+                        else pending++;
+                    }
+                }
+
+                saved = prefs.edit().putString(HISTORY_KEY, records.toString())
+                        .putLong(LAST_SUCCESS, completedAt)
+                        .putInt(LAST_UPDATED, measured)
+                        .putInt(LAST_FAILED, missingPrice)
+                        .putString(LAST_ERROR, (missingPrice > 0
+                                ? "Fiyatı alınamayan sinyal: " + missingPrice + " • "
+                                : "Hata yok • ")
+                                + "Bekleyen: " + pending + " • Kaçırılan: " + missed)
+                        .commit();
+            } catch (Exception e) {
+                saveFailure(prefs, measured, missingPrice, "Ölçüm kaydı hazırlanamadı: " + safeMessage(e));
+                return Result.retry();
             }
-        } catch (Exception e) {
-            saveFailure(prefs, measured, records.length(), "Ölçüm kaydı hazırlanamadı: " + safeMessage(e));
-            return Result.retry();
         }
 
-        boolean saved = prefs.edit().putString(HISTORY_KEY, records.toString())
-                .putLong(LAST_SUCCESS, completedAt)
-                .putInt(LAST_UPDATED, measured)
-                .putInt(LAST_FAILED, missingPrice)
-                .putString(LAST_ERROR, missingPrice > 0
-                        ? "Fiyatı alınamayan sinyal: " + missingPrice
-                        : "Hata yok • Bekleyen: " + waiting + " • Kaçırılan: " + missed)
-                .commit();
         if (!saved) return Result.retry();
         return missingPrice > 0 ? Result.retry() : Result.success();
     }
@@ -147,9 +172,9 @@ public class EarlyOpportunityValidationWorker extends Worker {
                     String symbol = ticker.optString("symbol", "");
                     if (!symbol.endsWith("USDT")) continue;
                     double price = ticker.optDouble("lastPrice", 0.0);
-                    long timestamp = ticker.optLong("closeTime", 0L);
-                    if (price > 0 && timestamp > 0 && !Double.isNaN(price) && !Double.isInfinite(price))
-                        result.put(symbol, new Quote(price, timestamp));
+                    long closeTime = ticker.optLong("closeTime", 0L);
+                    if (price > 0 && !Double.isNaN(price) && !Double.isInfinite(price))
+                        result.put(symbol, new Quote(price, closeTime));
                 }
                 return result;
             }
@@ -170,7 +195,7 @@ public class EarlyOpportunityValidationWorker extends Worker {
 
     private static final class Quote {
         final double price;
-        final long timestamp;
-        Quote(double price, long timestamp) { this.price = price; this.timestamp = timestamp; }
+        final long closeTime;
+        Quote(double price, long closeTime) { this.price = price; this.closeTime = closeTime; }
     }
 }
