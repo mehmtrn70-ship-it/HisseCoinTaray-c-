@@ -91,7 +91,11 @@ public class EarlyOpportunityValidationWorker extends Worker {
                     Quote quote = quotes.get(symbol);
                     boolean hasPrice = quote != null && quote.price > 0
                             && !Double.isNaN(quote.price) && !Double.isInfinite(quote.price);
-                    if (!hasPrice) missingPrice++;
+                    boolean priceNeededNow = false;
+                    for (int j = 0; j < TARGETS.length; j++) {
+                        if (!record.has(KEYS[j]) && age >= TARGETS[j]) priceNeededNow = true;
+                    }
+                    if (priceNeededNow && !hasPrice) missingPrice++;
 
                     for (int j = 0; j < TARGETS.length; j++) {
                         String key = KEYS[j];
@@ -122,7 +126,8 @@ public class EarlyOpportunityValidationWorker extends Worker {
                 // These are cumulative outstanding checkpoints, not just changes in this run.
                 for (int i = 0; i < records.length(); i++) {
                     JSONObject record = records.optJSONObject(i);
-                    if (record == null) continue;
+                    if (record == null || record.optLong("entryAt", 0L) <= 0
+                            || record.optDouble("entryPrice", 0.0) <= 0) continue;
                     for (String key : KEYS) {
                         if (record.has(key)) continue;
                         if (record.optBoolean(key + "_missed", false)) missed++;
