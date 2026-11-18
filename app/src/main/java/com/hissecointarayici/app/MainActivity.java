@@ -1137,9 +1137,15 @@ public class MainActivity extends Activity {
                             long target = days * day;
                             // Capture the first available real price at or after each target.
                             // Do not impose a narrow window that can be missed between scans.
-                            if (!item.has(priceKey) && elapsed >= target) {
+                            if ((!item.has(priceKey) || item.optDouble(priceKey, 0) <= 0) && elapsed >= target) {
                                 item.put(priceKey, scan.q.price);
                                 item.put(timeKey, now);
+                                item.put("horizon" + days + "TargetTime", baseTime + target);
+                                item.put("horizon" + days + "ElapsedMs", elapsed);
+                                item.put("horizon" + days + "DelayMs", Math.max(0L, elapsed - target));
+                                item.put("horizon" + days + "Late", elapsed > target + 30L * 60L * 1000L);
+                                item.put("horizon" + days + "CaptureSource", "foreground_scan");
+                                item.remove("horizon" + days + "Missed");
                             }
                         }
                     }
@@ -1254,7 +1260,9 @@ public class MainActivity extends Activity {
                 long actualElapsed = observedAt - baseTime;
                 long actualDays = actualElapsed / (24L * 60L * 60L * 1000L);
                 long actualHours = (actualElapsed % (24L * 60L * 60L * 1000L)) / (60L * 60L * 1000L);
-                timing = " (" + actualDays + "g " + actualHours + "sa)";
+                timing = " (" + actualDays + "g " + actualHours + "sa"
+                        + (item.optBoolean("horizon" + days + "Late", actualElapsed > target + 30L * 60L * 1000L) ? " • gecikmeli" : "")
+                        + ")";
             }
             return String.format(Locale.US, "%+.2f%%", savedPct) + timing;
         }
