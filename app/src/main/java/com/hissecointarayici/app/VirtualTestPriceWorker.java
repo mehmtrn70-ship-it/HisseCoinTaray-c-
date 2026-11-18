@@ -79,9 +79,10 @@ public class VirtualTestPriceWorker extends Worker {
                     throw new Exception("Fiyat verisi eski veya geçersiz");
                 }
 
+                long capturedAt = System.currentTimeMillis();
                 item.put("current", quote.price);
-                item.put("lastUpdate", quote.timestamp);
-                captureHorizons(item, quote.price, quote.timestamp);
+                item.put("lastUpdate", capturedAt);
+                captureHorizons(item, quote.price, capturedAt, quote.timestamp);
                 updated++;
             } catch (Exception e) {
                 failed++;
@@ -226,25 +227,29 @@ public class VirtualTestPriceWorker extends Worker {
         } catch (Exception ignored) { }
     }
 
-    private static void captureHorizons(JSONObject item, double price, long quoteTime) throws Exception {
-        // Existing legacy records still receive current prices, but are never given invented
-        // 1d/3d/7d checkpoints. Only records already using the timestamped format are eligible.
+    private static void captureHorizons(JSONObject item, double price, long capturedAt, long exchangeTime) throws Exception {
+        // Store the app's actual capture time, not Binance ticker closeTime.
+        // Late background runs still provide a valid observed price; they must not be discarded.
         if (item.optInt("horizonCaptureVersion", 0) < 1) return;
         long start = item.optLong("time", 0L);
-        if (start <= 0) return;
-        long elapsed = quoteTime - start;
+        if (start <= 0 || price <= 0 || capturedAt <= 0) return;
+        long elapsed = capturedAt - start;
         for (int days : new int[]{1, 3, 7}) {
-            String priceKey = "horizon" + days + "Price";
-            String timeKey = "horizon" + days + "Time";
-            String missedKey = "horizon" + days + "Missed";
+            String prefix = "horizon" + days;
+            String priceKey = prefix + "Price";
+            if (item.has(priceKey) && item.optDouble(priceKey, 0) > 0) continue;
             long target = days * DAY_MS;
-            if (!item.has(priceKey) && !item.optBoolean(missedKey, false)) {
-                if (elapsed >= target && elapsed <= target + HORIZON_TOLERANCE_MS) {
-                    item.put(priceKey, price);
-                    item.put(timeKey, quoteTime);
-                } else if (elapsed > target + HORIZON_TOLERANCE_MS) {
-                    item.put(missedKey, true);
-                }
+            if (elapsed >= target) {
+                item.put(priceKey, price);
+                item.put(prefix + "Time", capturedAt);
+                item.put(prefix + "TargetTime", start + target);
+                item.put(prefix + "ElapsedMs", elapsed);
+                item.put(prefix + "DelayMs", Math.max(0L, elapsed - target));
+                item.put(prefix + "Late", elapsed > target + 30L * 60L * 1000L);
+                item.put(prefix + "ExchangeTime", exchangeTime);
+                item.put(prefix + "CaptureSource", "app_capture");
+                // Clear obsolete missed markers from older versions once a real price is captured.
+                item.remove(prefix + "Missed");
             }
         }
     }
