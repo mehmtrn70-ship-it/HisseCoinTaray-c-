@@ -90,7 +90,17 @@ public class VirtualTestPriceWorker extends Worker {
             }
         }
 
-        boolean saved = prefs.edit().putString(TEST_KEY, test.toString()).commit();
+        boolean saved;
+        synchronized (MainActivity.class) {
+            // Re-read under the same lock used by foreground signal scans, then merge only
+            // fresh quote/checkpoint fields so concurrent UI updates cannot be overwritten.
+            JSONArray latest;
+            try { latest = new JSONArray(prefs.getString(TEST_KEY, "[]")); }
+            catch (Exception e) { latest = new JSONArray(); }
+            mergeCapturedFields(latest, test);
+            saved = prefs.edit().putString(TEST_KEY, latest.toString()).commit();
+            test = latest;
+        }
         if (!saved) {
             saveStatus(prefs, attemptAt, updated, "Fiyat kayıtları kalıcı olarak yazılamadı");
             recordBackgroundRun(prefs, attemptAt, updated, failed, "Fiyat kayıtları kalıcı olarak yazılamadı", false);
@@ -225,6 +235,36 @@ public class VirtualTestPriceWorker extends Worker {
                     .putString("virtual_test_bg_notification_last_detail", detail)
                     .commit();
         } catch (Exception ignored) { }
+    }
+
+    private static void mergeCapturedFields(JSONArray latest, JSONArray fetched) throws Exception {
+        for (int i = 0; i < fetched.length(); i++) {
+            JSONObject update = fetched.optJSONObject(i);
+            if (update == null) continue;
+            String name = update.optString("name", "");
+            boolean coin = update.optBoolean("coin", false);
+            for (int j = 0; j < latest.length(); j++) {
+                JSONObject target = latest.optJSONObject(j);
+                if (target == null || !name.equals(target.optString("name", ""))
+                        || coin != target.optBoolean("coin", false)) continue;
+                copyIfPresent(update, target, "current");
+                copyIfPresent(update, target, "lastUpdate");
+                for (int days : new int[]{1, 3, 7}) {
+                    String prefix = "horizon" + days;
+                    for (String suffix : new String[]{"Price", "Time", "TargetTime", "ElapsedMs",
+                            "DelayMs", "Late", "ExchangeTime", "CaptureSource"}) {
+                        copyIfPresent(update, target, prefix + suffix);
+                    }
+                    if (update.has(prefix + "Price") && update.optDouble(prefix + "Price", 0) > 0)
+                        target.remove(prefix + "Missed");
+                }
+                break;
+            }
+        }
+    }
+
+    private static void copyIfPresent(JSONObject source, JSONObject target, String key) throws Exception {
+        if (source.has(key)) target.put(key, source.get(key));
     }
 
     private static void captureHorizons(JSONObject item, double price, long capturedAt, long exchangeTime) throws Exception {
