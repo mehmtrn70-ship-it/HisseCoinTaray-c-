@@ -2,6 +2,10 @@ plugins {
     id("com.android.application")
 }
 
+dependencies {
+    implementation("androidx.work:work-runtime:2.10.1")
+}
+
 val signingStorePath = System.getenv("ANDROID_KEYSTORE_PATH")
 val signingStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
 val signingKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
