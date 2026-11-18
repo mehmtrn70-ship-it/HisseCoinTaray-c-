@@ -1250,6 +1250,7 @@ public class MainActivity extends Activity {
         long baseTime = item.optLong("time", 0);
         double basePrice = item.optDouble("entry", 0);
         if (baseTime <= 0 || basePrice <= 0) return "veri yok";
+        long target = days * 24L * 60L * 60L * 1000L;
         String savedPriceKey = "horizon" + days + "Price";
         double savedPrice = item.optDouble(savedPriceKey, 0);
         if (savedPrice > 0) {
@@ -1266,7 +1267,6 @@ public class MainActivity extends Activity {
             }
             return String.format(Locale.US, "%+.2f%%", savedPct) + timing;
         }
-        long target = days * 24L * 60L * 60L * 1000L;
         long tolerance = 24L * 60L * 60L * 1000L;
         JSONArray history;
         try { history = new JSONArray(paperPrefs().getString("signal_history", "[]")); }
