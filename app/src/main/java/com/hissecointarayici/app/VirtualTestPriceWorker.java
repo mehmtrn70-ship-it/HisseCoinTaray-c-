@@ -270,7 +270,6 @@ public class VirtualTestPriceWorker extends Worker {
     private static void captureHorizons(JSONObject item, double price, long capturedAt, long exchangeTime) throws Exception {
         // Store the app's actual capture time, not Binance ticker closeTime.
         // Late background runs still provide a valid observed price; they must not be discarded.
-        if (item.optInt("horizonCaptureVersion", 0) < 1) return;
         long start = item.optLong("time", 0L);
         if (start <= 0 || price <= 0 || capturedAt <= 0) return;
         long elapsed = capturedAt - start;
