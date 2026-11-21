@@ -97,9 +97,14 @@ public class VirtualTestPriceWorker extends Worker {
             JSONArray latest;
             try { latest = new JSONArray(prefs.getString(TEST_KEY, "[]")); }
             catch (Exception e) { latest = new JSONArray(); }
-            mergeCapturedFields(latest, test);
-            saved = prefs.edit().putString(TEST_KEY, latest.toString()).commit();
-            test = latest;
+            try {
+                mergeCapturedFields(latest, test);
+                saved = prefs.edit().putString(TEST_KEY, latest.toString()).commit();
+                test = latest;
+            } catch (Exception mergeError) {
+                // Do not overwrite persisted records if a merge fails; let WorkManager retry.
+                saved = false;
+            }
         }
         if (!saved) {
             saveStatus(prefs, attemptAt, updated, "Fiyat kayıtları kalıcı olarak yazılamadı");
