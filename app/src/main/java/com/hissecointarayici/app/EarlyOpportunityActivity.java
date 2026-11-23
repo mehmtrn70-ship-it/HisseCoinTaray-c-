@@ -114,9 +114,32 @@ public class EarlyOpportunityActivity extends Activity {
                 }
                 ArrayList<Candidate> found=new ArrayList<>();
                 int failed=0;
-                for(Future<Candidate> f:futures) {
-                    try { Candidate c=f.get(40,TimeUnit.SECONDS); if(c!=null) found.add(c); }
-                    catch(Exception e) { failed++; }
+                // Use one overall scan deadline. Per-future 40s waits could otherwise
+                // add up hundreds of times and leave queued HTTP tasks running after UI completion.
+                long scanDeadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(180);
+                for(Future<Candidate> future:futures) {
+                    long remaining=scanDeadline-System.nanoTime();
+                    if(remaining<=0) {
+                        failed++;
+                        future.cancel(true);
+                        continue;
+                    }
+                    try {
+                        Candidate c=future.get(remaining,TimeUnit.NANOSECONDS);
+                        if(c!=null) found.add(c);
+                    } catch(TimeoutException e) {
+                        failed++;
+                        future.cancel(true);
+                    } catch(InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        failed++;
+                        break;
+                    } catch(Exception e) {
+                        failed++;
+                    }
+                }
+                for(Future<Candidate> future:futures) {
+                    if(!future.isDone()) future.cancel(true);
                 }
                 found.sort((a,b)->Double.compare(b.score,a.score));
                 recordAndMeasureConfirmedSignals(found, livePrices, marketSnapshotAt);
