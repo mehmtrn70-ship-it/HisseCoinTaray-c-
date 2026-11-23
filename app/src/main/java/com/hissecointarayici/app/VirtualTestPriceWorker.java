@@ -286,6 +286,9 @@ public class VirtualTestPriceWorker extends Worker {
     }
 
     private static void captureHorizons(JSONObject item, double price, long capturedAt, long exchangeTime) throws Exception {
+        // Match the foreground guard: legacy records must never receive today's price
+        // as if it were a missing historical checkpoint.
+        if (item.optInt("horizonCaptureVersion", 0) < 1) return;
         // Store the app's actual capture time, not Binance ticker closeTime.
         // Late background runs still provide a valid observed price; they must not be discarded.
         long start = item.optLong("time", 0L);
