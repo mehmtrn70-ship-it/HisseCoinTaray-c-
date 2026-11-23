@@ -89,18 +89,22 @@ public class EarlyOpportunityActivity extends Activity {
                     JSONObject t=tickers.getJSONObject(i);
                     String symbol=t.optString("symbol");
                     double change=t.optDouble("priceChangePercent",0);
-                    if(symbol.endsWith("USDT")) livePrices.put(symbol,t.optDouble("lastPrice",0));
+                    double tickerPrice=t.optDouble("lastPrice",0);
+                    if(symbol.endsWith("USDT") && tickerPrice>0
+                            && !Double.isNaN(tickerPrice) && !Double.isInfinite(tickerPrice))
+                        livePrices.put(symbol,tickerPrice);
                     double quoteVol=t.optDouble("quoteVolume",0);
                     String base = symbol.endsWith("USDT") ? symbol.substring(0, symbol.length()-4) : "";
-                    if(symbol.endsWith("USDT") && !isStableBase(base) && !isMetalBase(base)
-                        && !symbol.contains("UP") && !symbol.contains("DOWN")
-                        && !symbol.contains("BULL") && !symbol.contains("BEAR")
-                        && quoteVol>0 && change<=10.0 && change>=-20.0) {
+                    if(symbol.endsWith("USDT") && !base.isEmpty()
+                        && !isStableBase(base) && !isMetalBase(base) && !isLeveragedToken(base)
+                        && quoteVol>0 && !Double.isNaN(quoteVol) && !Double.isInfinite(quoteVol)
+                        && !Double.isNaN(change) && !Double.isInfinite(change)
+                        && change<=10.0 && change>=-20.0) {
                         ranked.add(t);
                     }
                 }
                 long marketSnapshotAt = System.currentTimeMillis();
-                updateTrackedRecords(livePrices);
+                updateTrackedRecords(livePrices, marketSnapshotAt);
                 ranked.sort((a,b)->Double.compare(b.optDouble("quoteVolume",0),a.optDouble("quoteVolume",0)));
                 int count=Math.min(300,ranked.size());
                 ArrayList<Future<Candidate>> futures=new ArrayList<>();
@@ -116,7 +120,7 @@ public class EarlyOpportunityActivity extends Activity {
                 }
                 found.sort((a,b)->Double.compare(b.score,a.score));
                 recordAndMeasureConfirmedSignals(found, livePrices, marketSnapshotAt);
-                saveNewSignals(found);
+                saveNewSignals(found, livePrices, marketSnapshotAt);
                 final int failures=failed, scanned=count;
                 runOnUiThread(() -> {
                     status.setText("İncelenen: "+scanned+" • Analiz hatası: "+failures+" • Aday: "+found.size()
@@ -139,6 +143,12 @@ public class EarlyOpportunityActivity extends Activity {
             "USDJ","USDX","GUSD","LUSD","SUSD","USDG","RWUSD").contains(b);
     }
     private boolean isMetalBase(String b) { return Arrays.asList("XAUT","PAXG").contains(b); }
+    private boolean isLeveragedToken(String base) {
+        // Filter Binance leveraged-token suffixes only; substring matching wrongly
+        // excluded ordinary assets whose names merely contain UP/DOWN/BULL/BEAR.
+        return base.endsWith("UP") || base.endsWith("DOWN")
+                || base.endsWith("BULL") || base.endsWith("BEAR");
+    }
 
     private Candidate analyze(JSONObject ticker) throws Exception {
         String symbol=ticker.getString("symbol");
@@ -148,6 +158,9 @@ public class EarlyOpportunityActivity extends Activity {
         if(a.close.size()<45 || b.close.size()<30) return null;
         int n=a.close.size();
         double last=a.close.get(n-1);
+        double displayPrice=ticker.optDouble("lastPrice",last);
+        if(displayPrice<=0 || Double.isNaN(displayPrice) || Double.isInfinite(displayPrice))
+            displayPrice=last;
         double rsi15=rsi(a.close), rsi1h=rsi(b.close);
         double vol15=ratio(a.volume), vol1h=ratio(b.volume);
         double low=recentLow(a.low,40);
@@ -218,7 +231,7 @@ public class EarlyOpportunityActivity extends Activity {
         String category=confirmed?"ALIM TEYİDİ • KOŞULLAR SAĞLANDI"
                 :score>=60?"ERKEN FIRSAT • TEYİT BEKLİYOR"
                 :score>=40?"İZLEME LİSTESİ":"ZAYIF ADAY";
-        return new Candidate(symbol,last,ticker.optDouble("priceChangePercent",0),vol15,vol1h,
+        return new Candidate(symbol,displayPrice,ticker.optDouble("priceChangePercent",0),vol15,vol1h,
             rsi15,rsi1h,supportDistance,resistanceDistance,score,category,confirmed,reasons.toString());
     }
 
@@ -301,11 +314,11 @@ public class EarlyOpportunityActivity extends Activity {
         for(int i=start;i<end;i++) if(a.get(i)>0)low=Math.min(low,a.get(i));
         return low==Double.MAX_VALUE?0:low;
     }
-    private void saveNewSignals(List<Candidate> found) {
+    private void saveNewSignals(List<Candidate> found, Map<String,Double> live, long snapshotAt) {
         try {
             SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
             JSONArray old=new JSONArray(p.getString(HISTORY,"[]"));
-            long now=System.currentTimeMillis();
+            long now=snapshotAt;
             JSONArray out=new JSONArray();
             for(int i=0;i<old.length();i++) out.put(old.getJSONObject(i));
             for(Candidate c:found) {
@@ -316,8 +329,11 @@ public class EarlyOpportunityActivity extends Activity {
                     if(c.symbol.equals(r.optString("symbol")) && now-r.optLong("time")<DUPLICATE_WINDOW) {recent=true;break;}
                 }
                 if(!recent) {
+                    Double entryPrice=live.get(c.symbol);
+                    if(entryPrice==null || entryPrice<=0 || Double.isNaN(entryPrice) || Double.isInfinite(entryPrice))
+                        continue;
                     JSONObject r=new JSONObject();
-                    r.put("symbol",c.symbol); r.put("price",c.price); r.put("time",now);
+                    r.put("symbol",c.symbol); r.put("price",entryPrice); r.put("time",snapshotAt);
                     r.put("score",c.score); r.put("category",c.category);
                     out.put(r);
                 }
@@ -328,11 +344,11 @@ public class EarlyOpportunityActivity extends Activity {
             p.edit().putString(HISTORY,trimmed.toString()).apply();
         } catch(Exception ignored) {}
     }
-    private void updateTrackedRecords(Map<String,Double> live) {
+    private void updateTrackedRecords(Map<String,Double> live, long snapshotAt) {
         try {
             SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
             JSONArray old=new JSONArray(p.getString(HISTORY,"[]"));
-            long now=System.currentTimeMillis();
+            long now=snapshotAt;
             int one=p.getInt("measured_1d_total",0);
             int three=p.getInt("measured_3d_total",0);
             int seven=p.getInt("measured_7d_total",0);
