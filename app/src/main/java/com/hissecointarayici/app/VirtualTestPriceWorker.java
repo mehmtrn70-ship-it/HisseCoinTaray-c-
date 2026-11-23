@@ -30,6 +30,9 @@ public class VirtualTestPriceWorker extends Worker {
     private static final long DAY_MS = 24L * 60L * 60L * 1000L;
     private static final long HORIZON_TOLERANCE_MS = 6L * 60L * 60L * 1000L;
     private static final long MAX_QUOTE_AGE_MS = 72L * 60L * 60L * 1000L;
+    // Crypto ticker data should be near-real-time; the longer allowance is only for
+    // exchange-traded stocks whose last regular-session quote may be from a prior day.
+    private static final long MAX_CRYPTO_QUOTE_AGE_MS = 15L * 60L * 1000L;
     private static final String AUDIT_CHANNEL_ID = "virtual_test_background_audit_v3";
     private static final int AUDIT_NOTIFICATION_ID_BASE = 7144;
     private static final String HISTORY_KEY = "virtual_test_bg_history";
@@ -62,8 +65,6 @@ public class VirtualTestPriceWorker extends Worker {
         int updated = 0;
         int failed = 0;
         StringBuilder errors = new StringBuilder();
-        long now = System.currentTimeMillis();
-
         for (int i = 0; i < test.length(); i++) {
             JSONObject item = test.optJSONObject(i);
             if (item == null) { failed++; appendError(errors, "Bozuk kayıt"); continue; }
@@ -73,13 +74,13 @@ public class VirtualTestPriceWorker extends Worker {
 
             try {
                 PriceQuote quote = coin ? fetchBinance(name) : fetchYahoo(name);
-                long age = now - quote.timestamp;
+                long capturedAt = System.currentTimeMillis();
+                long age = capturedAt - quote.timestamp;
+                long maxQuoteAge = coin ? MAX_CRYPTO_QUOTE_AGE_MS : MAX_QUOTE_AGE_MS;
                 if (quote.price <= 0 || (Double.isNaN(quote.price) || Double.isInfinite(quote.price))
-                        || quote.timestamp <= 0 || age < -5L * 60L * 1000L || age > MAX_QUOTE_AGE_MS) {
+                        || quote.timestamp <= 0 || age < -5L * 60L * 1000L || age > maxQuoteAge) {
                     throw new Exception("Fiyat verisi eski veya geçersiz");
                 }
-
-                long capturedAt = System.currentTimeMillis();
                 item.put("current", quote.price);
                 item.put("lastUpdate", capturedAt);
                 captureHorizons(item, quote.price, capturedAt, quote.timestamp);
@@ -252,16 +253,28 @@ public class VirtualTestPriceWorker extends Worker {
                 JSONObject target = latest.optJSONObject(j);
                 if (target == null || !name.equals(target.optString("name", ""))
                         || coin != target.optBoolean("coin", false)) continue;
-                copyIfPresent(update, target, "current");
-                copyIfPresent(update, target, "lastUpdate");
+
+                // Keep whichever current quote was captured later.
+                long incomingUpdateAt = update.optLong("lastUpdate", 0L);
+                long existingUpdateAt = target.optLong("lastUpdate", 0L);
+                if (incomingUpdateAt > 0 && incomingUpdateAt >= existingUpdateAt) {
+                    copyIfPresent(update, target, "current");
+                    copyIfPresent(update, target, "lastUpdate");
+                }
+
+                // A horizon is a one-time checkpoint: preserve the first valid capture.
+                // A slower worker must never overwrite a checkpoint already saved by a scan.
                 for (int days : new int[]{1, 3, 7}) {
                     String prefix = "horizon" + days;
-                    for (String suffix : new String[]{"Price", "Time", "TargetTime", "ElapsedMs",
-                            "DelayMs", "Late", "ExchangeTime", "CaptureSource"}) {
-                        copyIfPresent(update, target, prefix + suffix);
-                    }
-                    if (update.has(prefix + "Price") && update.optDouble(prefix + "Price", 0) > 0)
+                    boolean targetHasPrice = target.optDouble(prefix + "Price", 0.0) > 0;
+                    boolean updateHasPrice = update.optDouble(prefix + "Price", 0.0) > 0;
+                    if (!targetHasPrice && updateHasPrice) {
+                        for (String suffix : new String[]{"Price", "Time", "TargetTime", "ElapsedMs",
+                                "DelayMs", "Late", "ExchangeTime", "CaptureSource"}) {
+                            copyIfPresent(update, target, prefix + suffix);
+                        }
                         target.remove(prefix + "Missed");
+                    }
                 }
                 break;
             }
