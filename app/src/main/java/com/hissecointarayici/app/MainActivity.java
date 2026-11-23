@@ -1108,6 +1108,8 @@ public class MainActivity extends Activity {
     }
 
     private void updateVirtualSignalTestPrices(ArrayList<Scan> scans) {
+        // Serialize foreground updates with the background worker's read/merge/write cycle.
+        synchronized (MainActivity.class) {
         JSONArray test;
         try { test = new JSONArray(paperPrefs().getString("virtual_signal_test", "[]")); }
         catch (Exception e) { return; }
@@ -1154,7 +1156,8 @@ public class MainActivity extends Activity {
                 break;
             }
         }
-        if (changed) paperPrefs().edit().putString("virtual_signal_test", test.toString()).apply();
+        if (changed) paperPrefs().edit().putString("virtual_signal_test", test.toString()).commit();
+        }
     }
 
     private void renderVirtualSignalTest(JSONArray test) {
@@ -1336,12 +1339,23 @@ public class MainActivity extends Activity {
             long ageMinutes = (observedAt - exchangeTime) / 60000L;
             quoteAge = " • borsa verisi yaşı " + ageMinutes + "dk";
         }
-        return days + "g: " + formatPortfolioPrice(price, coin)
+        String basePriceText = formatAuditPrice(item.optDouble("entry", 0.0), coin);
+        String observedPriceText = formatAuditPrice(price, coin);
+        return days + "g: baz " + basePriceText + " → ölçüm " + observedPriceText
                 + " " + currencyFor(coin)
                 + " @ " + stamp + " • geçen " + formatHorizonDuration(elapsed)
                 + " • gecikme " + formatHorizonDuration(delay)
                 + " • " + sourceLabel + quoteAge
                 + (item.optBoolean(prefix + "Late", elapsed > target + 30L * 60L * 1000L) ? " • gecikmeli" : "");
+    }
+
+    private String formatAuditPrice(double value, boolean coin) {
+        if (!coin) return String.format(Locale.US, "%.4f", value);
+        String formatted = String.format(Locale.US, "%.8f", value);
+        while (formatted.indexOf(".") >= 0 && formatted.endsWith("0"))
+            formatted = formatted.substring(0, formatted.length() - 1);
+        if (formatted.endsWith(".")) formatted = formatted.substring(0, formatted.length() - 1);
+        return formatted;
     }
 
     private String formatHorizonDuration(long millis) {
