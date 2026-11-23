@@ -1165,7 +1165,7 @@ public class MainActivity extends Activity {
         double reportFxRate = (usdtTryRateUpdatedAt > 0
                 && System.currentTimeMillis() - usdtTryRateUpdatedAt <= 12L * 60L * 60L * 1000L)
                 ? usdtTryRate : 0.0;
-        int winners = 0, losers = 0;
+        int winners = 0, losers = 0, unvalued = 0;
         long start = Long.MAX_VALUE;
         for (int i = 0; i < test.length(); i++) {
             JSONObject item = test.optJSONObject(i);
@@ -1177,12 +1177,12 @@ public class MainActivity extends Activity {
             boolean coin = item.optBoolean("coin", false);
             long time = item.optLong("time", 0);
             if (time > 0) start = Math.min(start, time);
-            if (pnlNative > 0) winners++; else if (pnlNative < 0) losers++;
             double pnlTL = 0;
             String pnlTLText;
             if (coin) {
                 if (reportFxRate <= 0 || qty <= 0) {
                     missingCryptoRate = true;
+                    unvalued++;
                     pnlTLText = "hesaplanamadı";
                 } else {
                     // Current units are valued in TL; subtract their original TL allocation.
@@ -1190,12 +1190,14 @@ public class MainActivity extends Activity {
                     pnlTL = current * qty * reportFxRate - allocation;
                     totalPnlTL += pnlTL;
                     totalValueTL += allocation + pnlTL;
+                    if (pnlTL > 0) winners++; else if (pnlTL < 0) losers++;
                     pnlTLText = String.format(Locale.US, "%+.2f TL", pnlTL);
                 }
             } else {
                 pnlTL = pnlNative;
                 totalPnlTL += pnlTL;
                 totalValueTL += allocation + pnlTL;
+                if (pnlTL > 0) winners++; else if (pnlTL < 0) losers++;
                 pnlTLText = String.format(Locale.US, "%+.2f TL", pnlTL);
             }
             totalInvestedTL += allocation;
@@ -1208,7 +1210,10 @@ public class MainActivity extends Activity {
                     .append(" | K/Z: ").append(String.format(Locale.US, "%+.2f", pnlNative)).append(" ").append(currencyFor(coin))
                     .append(" (").append(pnlTLText).append(")")
                     .append("\n   1g / 3g / 7g: ").append(virtualTestHorizon(item, 1)).append(" / ")
-                    .append(virtualTestHorizon(item, 3)).append(" / ").append(virtualTestHorizon(item, 7)).append("\n");
+                    .append(virtualTestHorizon(item, 3)).append(" / ").append(virtualTestHorizon(item, 7))
+                    .append("\n   Ölçüm denetimi: ").append(virtualTestHorizonAudit(item, 1)).append(" | ")
+                    .append(virtualTestHorizonAudit(item, 3)).append(" | ")
+                    .append(virtualTestHorizonAudit(item, 7)).append("\n");
         }
         if (start == Long.MAX_VALUE) start = System.currentTimeMillis();
         long elapsed = Math.max(0, System.currentTimeMillis() - start);
@@ -1219,7 +1224,8 @@ public class MainActivity extends Activity {
                 + "Geçen süre: " + elapsedText + "\n"
                 + "Toplam K/Z: " + (missingCryptoRate ? "kur verisi yok — hesaplanamadı" : String.format(Locale.US, "%+.2f TL (yaklaşık)", totalPnlTL)) + "\n"
                 + "Tahmini portföy değeri: " + (missingCryptoRate ? "kur verisi yok — hesaplanamadı" : String.format(Locale.US, "%.2f TL (yaklaşık)", totalValueTL)) + "\n"
-                + "Kazanan / kaybeden: " + winners + " / " + losers
+                + "Kazanan / kaybeden (TL): " + winners + " / " + losers
+                + (unvalued > 0 ? " • TL karşılığı hesaplanamayan: " + unvalued : "")
                 + "\n\n" + backgroundCaptureStatusText()
                 + "\n1g/3g/7g ölçümleri, yeterli sonraki fiyat kaydı oluşunca hesaplanır. Kripto TL karşılığı tahminidir; bu bir sanal testtir, gerçek emir gönderilmez.\n";
         TextView content = new TextView(this);
@@ -1264,6 +1270,8 @@ public class MainActivity extends Activity {
                 timing = " (" + actualDays + "g " + actualHours + "sa"
                         + (item.optBoolean("horizon" + days + "Late", actualElapsed > target + 30L * 60L * 1000L) ? " • gecikmeli" : "")
                         + ")";
+            } else {
+                timing = " (zaman doğrulanamadı)";
             }
             return String.format(Locale.US, "%+.2f%%", savedPct) + timing;
         }
@@ -1291,7 +1299,59 @@ public class MainActivity extends Activity {
             return "bekleniyor";
         }
         double pct = (nearest.optDouble("price", 0) - basePrice) * 100.0 / basePrice;
-        return String.format(Locale.US, "%+.2f%%", pct);
+        long observedAt = nearest.optLong("time", 0L);
+        long actualElapsed = Math.max(0L, observedAt - baseTime);
+        long actualDays = actualElapsed / (24L * 60L * 60L * 1000L);
+        long actualHours = (actualElapsed % (24L * 60L * 60L * 1000L)) / (60L * 60L * 1000L);
+        return String.format(Locale.US, "%+.2f%%", pct)
+                + " (geçmiş kayıt • " + actualDays + "g " + actualHours + "sa)";
+    }
+
+    private String virtualTestHorizonAudit(JSONObject item, int days) {
+        String prefix = "horizon" + days;
+        double price = item.optDouble(prefix + "Price", 0.0);
+        boolean coin = item.optBoolean("coin", false);
+        if (price <= 0) {
+            return days + "g: doğrudan yakalama yok • " + virtualTestHorizon(item, days);
+        }
+        long baseTime = item.optLong("time", 0L);
+        long observedAt = item.optLong(prefix + "Time", 0L);
+        if (baseTime <= 0 || observedAt <= baseTime) {
+            return days + "g: " + formatPortfolioPrice(price, coin)
+                    + " " + currencyFor(coin) + " • zaman damgası doğrulanamadı";
+        }
+        long elapsed = item.optLong(prefix + "ElapsedMs", observedAt - baseTime);
+        if (elapsed <= 0) elapsed = observedAt - baseTime;
+        long target = days * 24L * 60L * 60L * 1000L;
+        long delay = item.optLong(prefix + "DelayMs", Math.max(0L, elapsed - target));
+        String stamp = new java.text.SimpleDateFormat("dd.MM HH:mm", Locale.getDefault())
+                .format(new Date(observedAt));
+        String source = item.optString(prefix + "CaptureSource", "");
+        String sourceLabel = "kayıt kaynağı bilinmiyor";
+        if ("app_capture".equals(source)) sourceLabel = "arka plan";
+        else if ("foreground_scan".equals(source)) sourceLabel = "uygulama taraması";
+        String quoteAge = "";
+        long exchangeTime = item.optLong(prefix + "ExchangeTime", 0L);
+        if (exchangeTime > 0 && observedAt >= exchangeTime) {
+            long ageMinutes = (observedAt - exchangeTime) / 60000L;
+            quoteAge = " • borsa verisi yaşı " + ageMinutes + "dk";
+        }
+        return days + "g: " + formatPortfolioPrice(price, coin)
+                + " " + currencyFor(coin)
+                + " @ " + stamp + " • geçen " + formatHorizonDuration(elapsed)
+                + " • gecikme " + formatHorizonDuration(delay)
+                + " • " + sourceLabel + quoteAge
+                + (item.optBoolean(prefix + "Late", elapsed > target + 30L * 60L * 1000L) ? " • gecikmeli" : "");
+    }
+
+    private String formatHorizonDuration(long millis) {
+        long safe = Math.max(0L, millis);
+        long days = safe / 86400000L;
+        long hours = (safe % 86400000L) / 3600000L;
+        long minutes = (safe % 3600000L) / 60000L;
+        if (days > 0) return days + "g " + hours + "sa";
+        if (hours > 0) return hours + "sa " + minutes + "dk";
+        return minutes + "dk";
     }
 
     private void showSignalHistory() {

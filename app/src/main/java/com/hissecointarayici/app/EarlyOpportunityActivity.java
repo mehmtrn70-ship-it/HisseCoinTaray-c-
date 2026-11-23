@@ -394,7 +394,7 @@ public class EarlyOpportunityActivity extends Activity {
                     JSONObject r=records.optJSONObject(i);
                     if(r==null) continue;
                     Double current=live.get(r.optString("symbol"));
-                    if(current==null || current<=0) continue;
+                    if(current==null || current<=0 || Double.isNaN(current) || Double.isInfinite(current)) continue;
                     long entryAt=r.optLong("entryAt",0L);
                     double entry=r.optDouble("entryPrice",0);
                     if(entryAt<=0 || entry<=0) continue;
@@ -464,6 +464,9 @@ public class EarlyOpportunityActivity extends Activity {
             JSONArray legacy=new JSONArray(p.getString(HISTORY,"[]"));
             JSONArray validated=new JSONArray(p.getString(VALIDATION_HISTORY,"[]"));
             int[] measured=new int[VALIDATION_KEYS.length];
+            int[] onTime=new int[VALIDATION_KEYS.length];
+            int[] lateByHorizon=new int[VALIDATION_KEYS.length];
+            int[] pending=new int[VALIDATION_KEYS.length];
             int[] missed=new int[VALIDATION_KEYS.length];
             int lateMeasurements=0;
             for(int i=0;i<validated.length();i++) {
@@ -473,15 +476,37 @@ public class EarlyOpportunityActivity extends Activity {
                     JSONObject checkpoint=r.optJSONObject(VALIDATION_KEYS[j]);
                     if(checkpoint!=null) {
                         measured[j]++;
-                        if(checkpoint.optBoolean("late",false)) lateMeasurements++;
+                        if(checkpoint.optBoolean("late",false)) {
+                            lateMeasurements++;
+                            lateByHorizon[j]++;
+                        } else {
+                            onTime[j]++;
+                        }
+                    } else if(r.optBoolean(VALIDATION_KEYS[j]+"_missed",false)) {
+                        missed[j]++;
+                    } else {
+                        pending[j]++;
                     }
-                    if(r.optBoolean(VALIDATION_KEYS[j]+"_missed",false)) missed[j]++;
                 }
             }
             StringBuilder counts=new StringBuilder();
+            StringBuilder onTimeCounts=new StringBuilder();
+            StringBuilder lateCounts=new StringBuilder();
+            StringBuilder pendingCounts=new StringBuilder();
+            StringBuilder missedCounts=new StringBuilder();
             for(int j=0;j<measured.length;j++) {
-                if(j>0) counts.append("/");
+                if(j>0) {
+                    counts.append("/");
+                    onTimeCounts.append("/");
+                    lateCounts.append("/");
+                    pendingCounts.append("/");
+                    missedCounts.append("/");
+                }
                 counts.append(measured[j]);
+                onTimeCounts.append(onTime[j]);
+                lateCounts.append(lateByHorizon[j]);
+                pendingCounts.append(pending[j]);
+                missedCounts.append(missed[j]);
             }
             long bgAt=p.getLong("validation_bg_last_success",0L);
             String bgText=bgAt>0
@@ -493,8 +518,9 @@ public class EarlyOpportunityActivity extends Activity {
             historyStatus.setText("Eski kayıt: "+legacy.length()
                 +" • Yeni teyitli sinyal: "+validated.length()
                 +"\nÖlçülen 1s/4s/24s/3g/7g: "+counts
-                +" • Gecikmeli ölçüm: "+lateMeasurements
-                +"\nArka plan son başarı: "+bgText+" • Yeni ölçüm: "+bgUpdated+" • Fiyat hatası: "+bgFailed
+                +"\nZamanında: "+onTimeCounts+" • Gecikmeli: "+lateCounts+" (toplam "+lateMeasurements+")"
+                +"\nBekleyen: "+pendingCounts+" • Kaçırılan: "+missedCounts
+                +"\nArka plan son kontrol: "+bgText+" • Yeni ölçüm: "+bgUpdated+" • Fiyat hatası: "+bgFailed
                 +(bgError.isEmpty()?"":"\nDurum: "+bgError));
         } catch(Exception e) { historyStatus.setText("Sinyal ölçüm kayıtları hazırlanıyor."); }
     }
