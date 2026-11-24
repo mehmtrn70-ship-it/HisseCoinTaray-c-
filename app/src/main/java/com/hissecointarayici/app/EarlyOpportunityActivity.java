@@ -54,23 +54,26 @@ public class EarlyOpportunityActivity extends Activity {
         root.addView(historyStatus);
         updateHistoryLabel();
         Button scan = new Button(this); scan.setText("ADAYLARI TARA");
-        root.addView(scan);
         status = new TextView(this); status.setText("Tarama başlatılmaya hazır.");
         status.setPadding(4,12,4,12); root.addView(status);
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.setClipToPadding(false);
         scroll.setVerticalScrollBarEnabled(true);
-        // Alt gezinme cubugu ve son kartin altinda kaydirma payi birak.
-        scroll.setPadding(0,0,0,dp(64));
+        // Tarama butonu kaydirma alaninin disinda sabit durur; son kart icin kucuk alt pay.
+        scroll.setPadding(0,0,0,dp(8));
         results = new LinearLayout(this); results.setOrientation(LinearLayout.VERTICAL);
-        results.setPadding(0,0,0,dp(48));
+        results.setPadding(0,0,0,dp(12));
         results.setClipToPadding(false);
         results.setClipChildren(false);
         scroll.addView(results);
         root.setClipToPadding(false);
         root.setClipChildren(false);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        // Bu buton ScrollView'in disinda oldugu icin liste kayarken ekranda sabit kalir.
+        LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(-1,-2);
+        scanParams.topMargin = dp(8);
+        root.addView(scan,scanParams);
         setContentView(root);
         scan.setOnClickListener(v -> startScan());
         startScan();
