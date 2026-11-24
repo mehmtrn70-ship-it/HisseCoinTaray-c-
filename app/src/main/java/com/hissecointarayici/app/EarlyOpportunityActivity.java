@@ -162,7 +162,7 @@ public class EarlyOpportunityActivity extends Activity {
 
     private boolean isStableBase(String b) {
         return Arrays.asList("USDT","USDC","BUSD","FDUSD","TUSD","USDP","DAI","USDE",
-            "USDS","USDD","USTC","FRAX","PYUSD","EUR","EURI","AEUR","RLUSD","USD1",
+            "USDS","USDD","USTC","FRAX","PYUSD","BFUSD","EUR","EURI","AEUR","RLUSD","USD1",
             "USDJ","USDX","GUSD","LUSD","SUSD","USDG","RWUSD").contains(b);
     }
     private boolean isMetalBase(String b) { return Arrays.asList("XAUT","PAXG").contains(b); }
@@ -236,8 +236,12 @@ public class EarlyOpportunityActivity extends Activity {
 
         double score=hourlyPoints+volumePoints+levelPoints+trendPoints+patternPoints+riskRewardPoints;
         score=Math.max(0,Math.min(100,score));
+        // Confirmation is stricter than the score: both timeframes must show volume,
+        // and the available move to resistance must justify the distance to support.
+        boolean acceptableRiskReward = breakoutCandidate || rewardRisk>=1.0;
         boolean confirmed = rsi1h>=50 && rsi15>=50 && hourlyRsiRising
-                && vol1h>=1.2 && (last1h>sma20 || breakoutCandidate);
+                && vol15>=1.2 && vol1h>=1.2 && acceptableRiskReward
+                && (last1h>sma20 || breakoutCandidate);
 
         StringBuilder reasons=new StringBuilder();
         if(nearSupport) reasons.append("Desteğe yakın • ");
@@ -248,8 +252,17 @@ public class EarlyOpportunityActivity extends Activity {
         if(vol15>=1.2) reasons.append("15dk hacim artışı • ");
         if(vol1h>=1.2) reasons.append("1s hacim artışı • ");
         if(hourlyRsiRising) reasons.append("Saatlik RSI yükseliyor • ");
-        if(!confirmed) reasons.append("Alım teyidi bekleniyor • ");
-        reasons.append("\nPuan katkısı: RSI "+hourlyPoints+"/20 • Hacim "+volumePoints+"/20 • Seviye "+levelPoints+"/20")
+        if(!confirmed) {
+            if(rsi1h<50) reasons.append("Saatlik RSI 50 altında • ");
+            if(rsi15<50) reasons.append("15dk RSI 50 altında • ");
+            if(vol15<1.2) reasons.append("15dk hacim teyidi yok • ");
+            if(vol1h<1.2) reasons.append("1s hacim teyidi yok • ");
+            if(!hourlyRsiRising) reasons.append("Saatlik RSI yükselişi yok • ");
+            if(!acceptableRiskReward) reasons.append("Teknik risk/ödül oranı 1:1 altında • ");
+            if(last1h<=sma20 && !breakoutCandidate) reasons.append("Fiyat saatlik SMA20 üzerinde değil • ");
+            reasons.append("Alım teyidi bekleniyor • ");
+        }
+        reasons.append("\nPuan katkısı: Saatlik RSI "+hourlyPoints+"/20 • Hacim "+volumePoints+"/20 • Seviye "+levelPoints+"/20")
                 .append(" • Trend "+trendPoints+"/15 • Dönüş "+patternPoints+"/15 • Risk/ödül "+riskRewardPoints+"/10");
         String category=confirmed?"ALIM TEYİDİ • KOŞULLAR SAĞLANDI"
                 :score>=60?"ERKEN FIRSAT • TEYİT BEKLİYOR"
@@ -292,7 +305,8 @@ public class EarlyOpportunityActivity extends Activity {
     private double rsi(List<Double> c) {
         int n=c.size(); if(n<15)return 50;
         double g=0,l=0; for(int i=n-14;i<n;i++){double d=c.get(i)-c.get(i-1);if(d>0)g+=d;else l-=d;}
-        if(l==0)return 100; double rs=g/l; return 100-100/(1+rs);
+        if(l==0) return g==0 ? 50 : 100;
+        double rs=g/l; return 100-100/(1+rs);
     }
     private double sma(List<Double> values,int period) {
         if(values.size()<period)return 0;
