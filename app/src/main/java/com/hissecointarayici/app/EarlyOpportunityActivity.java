@@ -22,6 +22,8 @@ public class EarlyOpportunityActivity extends Activity {
     private static final String PREFS = "early_opportunity_v2";
     private static final String HISTORY = "signals";
     private static final long DUPLICATE_WINDOW = 12L * 60L * 60L * 1000L;
+    private static final long MAX_TICKER_AGE_MS = 15L * 60L * 1000L;
+    private static final long MAX_FUTURE_SKEW_MS = 5L * 60L * 1000L;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -87,6 +89,7 @@ public class EarlyOpportunityActivity extends Activity {
         workers.execute(() -> {
             try {
                 JSONArray tickers = getArray("https://api.binance.com/api/v3/ticker/24hr");
+                long tickerSnapshotAt = System.currentTimeMillis();
                 HashMap<String,Double> livePrices = new HashMap<>();
                 ArrayList<JSONObject> ranked = new ArrayList<>();
                 for(int i=0;i<tickers.length();i++) {
@@ -94,8 +97,12 @@ public class EarlyOpportunityActivity extends Activity {
                     String symbol=t.optString("symbol");
                     double change=t.optDouble("priceChangePercent",0);
                     double tickerPrice=t.optDouble("lastPrice",0);
+                    long tickerTime=t.optLong("closeTime",0L);
+                    long tickerAge=tickerTime>0 ? tickerSnapshotAt-tickerTime : Long.MAX_VALUE;
                     if(symbol.endsWith("USDT") && tickerPrice>0
-                            && !Double.isNaN(tickerPrice) && !Double.isInfinite(tickerPrice))
+                            && !Double.isNaN(tickerPrice) && !Double.isInfinite(tickerPrice)
+                            && tickerTime>0 && tickerAge>=-MAX_FUTURE_SKEW_MS
+                            && tickerAge<=MAX_TICKER_AGE_MS)
                         livePrices.put(symbol,tickerPrice);
                     double quoteVol=t.optDouble("quoteVolume",0);
                     String base = symbol.endsWith("USDT") ? symbol.substring(0, symbol.length()-4) : "";
@@ -146,6 +153,16 @@ public class EarlyOpportunityActivity extends Activity {
                     if(!future.isDone()) future.cancel(true);
                 }
                 found.sort((a,b)->Double.compare(b.score,a.score));
+                // Do not display or save an alım teyidi when the Binance ticker quote is stale.
+                for(Candidate candidate:found) {
+                    if(candidate.confirmed && !livePrices.containsKey(candidate.symbol)) {
+                        candidate.confirmed=false;
+                        candidate.category=candidate.score>=60
+                                ? "ERKEN FIRSAT • TEYİT BEKLİYOR"
+                                : candidate.score>=40 ? "İZLEME LİSTESİ" : "ZAYIF ADAY";
+                        candidate.reasons += "\\nGüncel Binance fiyatı zaman sınırında doğrulanamadı • Alım teyidi bekleniyor";
+                    }
+                }
                 recordAndMeasureConfirmedSignals(found, livePrices, marketSnapshotAt);
                 saveNewSignals(found, livePrices, marketSnapshotAt);
                 final int failures=failed, scanned=count;
