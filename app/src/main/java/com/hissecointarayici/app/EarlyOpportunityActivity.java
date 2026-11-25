@@ -199,7 +199,7 @@ public class EarlyOpportunityActivity extends Activity {
         boolean divergence=positiveRsiDivergence(a.close);
         double resistance=highest(a.high,Math.max(0,n-21),n-1);
         double resistanceDistance=resistance>0?(resistance/last-1)*100:999;
-        double rsi1hPrevious=rsi(b.close.subList(0,b.close.size()-5));
+        double rsi1hPrevious=rsiAt(b.close,b.close.size()-5);
         boolean hourlyRsiRising=rsi1h>=rsi1hPrevious+1.0;
         double last1h=b.close.get(b.close.size()-1);
         double sma20=sma(b.close,20), sma50=sma(b.close,50);
@@ -243,7 +243,8 @@ public class EarlyOpportunityActivity extends Activity {
         // Confirmation is stricter than the score: both timeframes must show volume,
         // and the available move to resistance must justify the distance to support.
         boolean acceptableRiskReward = breakoutCandidate || rewardRisk>=1.0;
-        boolean confirmed = rsi1h>=50 && rsi15>=50 && hourlyRsiRising
+        // A technical confirmation must also meet the existing 60-point quality band.
+        boolean confirmed = score>=60 && rsi1h>=50 && rsi15>=50 && hourlyRsiRising
                 && vol15>=1.2 && vol1h>=1.2 && acceptableRiskReward
                 && (last1h>sma20 || breakoutCandidate);
 
@@ -257,6 +258,7 @@ public class EarlyOpportunityActivity extends Activity {
         if(vol1h>=1.2) reasons.append("1s hacim artışı • ");
         if(hourlyRsiRising) reasons.append("Saatlik RSI yükseliyor • ");
         if(!confirmed) {
+            if(score<60) reasons.append("Toplam puan 60 altında • ");
             if(rsi1h<50) reasons.append("Saatlik RSI 50 altında • ");
             if(rsi15<50) reasons.append("15dk RSI 50 altında • ");
             if(vol15<1.2) reasons.append("15dk hacim teyidi yok • ");
@@ -307,10 +309,31 @@ public class EarlyOpportunityActivity extends Activity {
         avg/=20; return avg>0?v.get(n-1)/avg:1;
     }
     private double rsi(List<Double> c) {
-        int n=c.size(); if(n<15)return 50;
-        double g=0,l=0; for(int i=n-14;i<n;i++){double d=c.get(i)-c.get(i-1);if(d>0)g+=d;else l-=d;}
-        if(l==0) return g==0 ? 50 : 100;
-        double rs=g/l; return 100-100/(1+rs);
+        return rsiAt(c,c.size());
+    }
+    // Standard 14-period Wilder RSI (RMA smoothing), matching common charting platforms.
+    // endExclusive lets the previous-hour comparison use the same price-series seed.
+    private double rsiAt(List<Double> c,int endExclusive) {
+        int end=Math.min(c.size(),endExclusive);
+        if(end<15)return 50;
+        double avgGain=0,avgLoss=0;
+        for(int i=1;i<=14;i++) {
+            double change=c.get(i)-c.get(i-1);
+            if(change>0)avgGain+=change;
+            else avgLoss-=change;
+        }
+        avgGain/=14.0;
+        avgLoss/=14.0;
+        for(int i=15;i<end;i++) {
+            double change=c.get(i)-c.get(i-1);
+            double gain=Math.max(0,change);
+            double loss=Math.max(0,-change);
+            avgGain=(avgGain*13.0+gain)/14.0;
+            avgLoss=(avgLoss*13.0+loss)/14.0;
+        }
+        if(avgLoss==0) return avgGain==0 ? 50 : 100;
+        double rs=avgGain/avgLoss;
+        return 100.0-100.0/(1.0+rs);
     }
     private double sma(List<Double> values,int period) {
         if(values.size()<period)return 0;
@@ -344,7 +367,7 @@ public class EarlyOpportunityActivity extends Activity {
         for(int i=n-36;i<split;i++) if(c.get(i)<oldLow){oldLow=c.get(i);oldIdx=i;}
         for(int i=split;i<n-2;i++) if(c.get(i)<newLow){newLow=c.get(i);newIdx=i;}
         if(oldIdx<0||newIdx<0||newLow>=oldLow*0.998)return false;
-        double oldRsi=rsi(c.subList(0,oldIdx+1)),newRsi=rsi(c.subList(0,newIdx+1));
+        double oldRsi=rsiAt(c,oldIdx+1),newRsi=rsiAt(c,newIdx+1);
         return newRsi>=oldRsi+3.0;
     }
     private double highest(ArrayList<Double> a,int from,int to) {
