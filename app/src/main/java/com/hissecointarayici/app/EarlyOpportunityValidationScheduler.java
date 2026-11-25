@@ -27,7 +27,7 @@ public final class EarlyOpportunityValidationScheduler {
                 .setConstraints(constraints)
                 .build();
         WorkManager.getInstance(app).enqueueUniquePeriodicWork(
-                PERIODIC_NAME, ExistingPeriodicWorkPolicy.KEEP, periodic);
+                PERIODIC_NAME, ExistingPeriodicWorkPolicy.UPDATE, periodic);
 
         OneTimeWorkRequest immediate = new OneTimeWorkRequest.Builder(EarlyOpportunityValidationWorker.class)
                 .setConstraints(constraints)
