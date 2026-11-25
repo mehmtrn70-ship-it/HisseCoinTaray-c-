@@ -160,7 +160,7 @@ public class EarlyOpportunityActivity extends Activity {
                         candidate.category=candidate.score>=60
                                 ? "ERKEN FIRSAT • TEYİT BEKLİYOR"
                                 : candidate.score>=40 ? "İZLEME LİSTESİ" : "ZAYIF ADAY";
-                        candidate.reasons += "\\nGüncel Binance fiyatı zaman sınırında doğrulanamadı • Alım teyidi bekleniyor";
+                        candidate.reasons += "\nGüncel Binance fiyatı zaman sınırında doğrulanamadı • Alım teyidi bekleniyor";
                     }
                 }
                 recordAndMeasureConfirmedSignals(found, livePrices, marketSnapshotAt);
