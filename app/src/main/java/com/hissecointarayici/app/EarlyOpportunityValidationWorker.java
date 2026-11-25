@@ -28,6 +28,9 @@ public class EarlyOpportunityValidationWorker extends Worker {
         60L*60L*1000L, 4L*60L*60L*1000L, 24L*60L*60L*1000L,
         3L*24L*60L*60L*1000L, 7L*24L*60L*60L*1000L
     };
+    // Reject stale ticker snapshots: a checkpoint must represent a recent market quote.
+    private static final long MAX_QUOTE_AGE_MS = 15L * 60L * 1000L;
+    private static final long MAX_FUTURE_SKEW_MS = 5L * 60L * 1000L;
     // Grace is now used only to label a measurement as late, never to discard it.
     private static final long[] GRACE = {
         20L*60L*1000L, 30L*60L*1000L, 2L*60L*60L*1000L,
@@ -89,8 +92,13 @@ public class EarlyOpportunityValidationWorker extends Worker {
                     if (age < 0) continue;
                     String symbol = record.optString("symbol", "");
                     Quote quote = quotes.get(symbol);
+                    long quoteAgeMs = quote == null || quote.closeTime <= 0
+                            ? Long.MAX_VALUE : completedAt - quote.closeTime;
                     boolean hasPrice = quote != null && quote.price > 0
-                            && !Double.isNaN(quote.price) && !Double.isInfinite(quote.price);
+                            && !Double.isNaN(quote.price) && !Double.isInfinite(quote.price)
+                            && quote.closeTime > 0
+                            && quoteAgeMs >= -MAX_FUTURE_SKEW_MS
+                            && quoteAgeMs <= MAX_QUOTE_AGE_MS;
                     boolean priceNeededNow = false;
                     for (int j = 0; j < TARGETS.length; j++) {
                         if (!record.has(KEYS[j]) && age >= TARGETS[j]) priceNeededNow = true;
@@ -116,7 +124,8 @@ public class EarlyOpportunityValidationWorker extends Worker {
                             checkpoint.put("delayMs", Math.max(0L, age - TARGETS[j]));
                             checkpoint.put("late", age > TARGETS[j] + GRACE[j]);
                             checkpoint.put("exchangeCloseTime", quote.closeTime);
-                            checkpoint.put("source", "Binance ticker lastPrice; app capture time");
+                            checkpoint.put("quoteAgeMs", Math.max(0L, quoteAgeMs));
+                            checkpoint.put("source", "Binance ticker lastPrice; fresh quote timestamp verified; app capture time");
                             record.put(key, checkpoint);
                             measured++;
                         }
@@ -151,7 +160,10 @@ public class EarlyOpportunityValidationWorker extends Worker {
         }
 
         if (!saved) return Result.retry();
-        return missingPrice > 0 ? Result.retry() : Result.success();
+        // A missing/stale quote affects only that signal. Keep its checkpoint pending;
+        // do not put the entire worker into exponential backoff and delay other signals.
+        // The next 15-minute periodic pass will retry any still-pending checkpoint.
+        return Result.success();
     }
 
     private Map<String, Quote> fetchAllBinanceQuotes() throws Exception {
