@@ -1818,14 +1818,15 @@ public class MainActivity extends Activity {
                 && now>=sessionStart && now<sessionEnd;
         if(regular==null && marketTime>0)
             regularSessionOpen=marketAge>=0 && marketAge<2L*60L*60L*1000L;
+        JSONArray close=r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("close");
+        ArrayList<Double> c=toList(close);
+        if((price<=0 || Double.isNaN(price) || Double.isInfinite(price)) && !c.isEmpty())
+            price=c.get(c.size()-1);
         if(price<=0 || Double.isNaN(price) || Double.isInfinite(price)
                 || marketTime<=0 || marketAge < -5L*60L*1000L
                 || (regularSessionOpen && marketAge>30L*60L*1000L)
                 || (!regularSessionOpen && marketAge>10L*24L*60L*60L*1000L))
             throw new Exception("Yahoo hisse fiyatı güncel değil: "+name);
-        JSONArray close=r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("close");
-        ArrayList<Double> c=toList(close);
-        if(Double.isNaN(price) && !c.isEmpty()) price=c.get(c.size()-1);
         double prev=c.size()>1?c.get(c.size()-2):price;
         double change=prev!=0?(price-prev)*100/prev:0;
         ArrayList<Double> highs=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("high"));
