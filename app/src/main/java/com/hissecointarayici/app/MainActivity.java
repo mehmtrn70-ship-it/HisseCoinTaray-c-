@@ -1748,22 +1748,39 @@ public class MainActivity extends Activity {
         showPaperPortfolio();
     }
 
+    private int[] scoreParts(Quote q) {
+        int changePoints = q.change>8?12:q.change>3?9:q.change>0?5
+                :q.change< -8?-12:q.change< -3?-9:q.change<0?-5:0;
+        int rsiPoints = q.rsi>=52 && q.rsi<=65?8:q.rsi>72?-10:q.rsi>=68?-4
+                :q.rsi<30?3:q.rsi<42?-3:0;
+        int smaPoints = q.sma>0?(q.price>q.sma?8:-8):0;
+        double macdPct = q.price>0?(q.macd/q.price)*100.0:0;
+        int macdPoints = macdPct>0.25?6:macdPct>0.05?3:macdPct< -0.25?-6:macdPct< -0.05?-3:0;
+        int volumePoints = q.volumeRatio>=2.0?6:q.volumeRatio>=1.3?4:q.volumeRatio<0.5?-5:0;
+        int resistancePoints = q.resistance>0 && q.price>q.resistance?4:0;
+        return new int[]{changePoints,rsiPoints,smaPoints,macdPoints,volumePoints,resistancePoints};
+    }
+
     private String reasonText(Quote q) {
-        ArrayList<String> r = new ArrayList<>();
-        if(q.change > 2) r.add("24s momentum güçlü");
-        else if(q.change > 0) r.add("24s değişim pozitif");
-        else if(q.change < -2) r.add("24s düşüş baskısı");
-        else r.add("24s hareket sınırlı");
-
-        if(q.rsi >= 50 && q.rsi <= 68) r.add("RSI dengeli");
-        else if(q.rsi > 72) r.add("RSI yüksek");
-        else if(q.rsi < 30) r.add("RSI düşük");
-        else r.add("RSI nötr");
-
-        if(q.sma > 0 && q.price > q.sma) r.add("fiyat SMA20 üzerinde");
-        else if(q.sma > 0) r.add("fiyat SMA20 altında");
-
-        return String.join(" • ", r);
+        int[] p=scoreParts(q);
+        int raw=50;
+        for(int value:p) raw+=value;
+        int finalScore=Math.max(10,Math.min(95,raw));
+        double macdPct=q.price>0?(q.macd/q.price)*100.0:0;
+        return "Başlangıç 50 puan"
+                +"\\n24s değişim ("+pct(q.change)+"): "+String.format(Locale.US,"%+d",p[0])
+                +" puan"
+                +"\\nRSI ("+String.format(Locale.US,"%.1f",q.rsi)+"): "+String.format(Locale.US,"%+d",p[1])
+                +" puan"
+                +"\\nSMA20 ("+(q.sma>0 && q.price>q.sma?"üzerinde":q.sma>0?"altında":"veri yok")+"): "+String.format(Locale.US,"%+d",p[2])
+                +" puan"
+                +"\\nMACD ("+String.format(Locale.US,"%+.3f%%",macdPct)+"): "+String.format(Locale.US,"%+d",p[3])
+                +" puan"
+                +"\\nHacim ("+String.format(Locale.US,"%.2fx",q.volumeRatio)+"): "+String.format(Locale.US,"%+d",p[4])
+                +" puan"
+                +"\\nDirenç kırılımı ("+(p[5]>0?"evet":"hayır")+"): "+String.format(Locale.US,"%+d",p[5])
+                +" puan"
+                +"\\nHam toplam: "+raw+" • Son skor: "+finalScore+"/100";
     }
 
     private String signal(double score) {
@@ -1950,27 +1967,10 @@ public class MainActivity extends Activity {
     }
 
     private double score(Quote q) {
-        // Dengeli puanlama: tek bir gösterge skoru tavana taşımasın.
-        double s=50;
-        if(q.change>8) s+=12; else if(q.change>3) s+=9; else if(q.change>0) s+=5;
-        else if(q.change<-8) s-=12; else if(q.change<-3) s-=9; else if(q.change<0) s-=5;
-        if(q.rsi>=52 && q.rsi<=65) s+=8;
-        else if(q.rsi>72) s-=10;
-        else if(q.rsi>=68) s-=4;
-        else if(q.rsi<30) s+=3;
-        else if(q.rsi<42) s-=3;
-        if(q.sma>0 && q.price>q.sma) s+=8;
-        else if(q.sma>0) s-=8;
-        double macdPct=q.price>0 ? (q.macd/q.price)*100.0 : 0;
-        if(macdPct>0.25) s+=6;
-        else if(macdPct>0.05) s+=3;
-        else if(macdPct< -0.25) s-=6;
-        else if(macdPct< -0.05) s-=3;
-        if(q.volumeRatio>=2.0) s+=6;
-        else if(q.volumeRatio>=1.3) s+=4;
-        else if(q.volumeRatio<0.5) s-=5;
-        if(q.resistance>0 && q.price>q.resistance) s+=4;
-        return Math.max(10,Math.min(95,s));
+        // Score and the user-visible explanation share exactly the same contributions.
+        int raw=50;
+        for(int value:scoreParts(q)) raw+=value;
+        return Math.max(10,Math.min(95,raw));
     }
 
     private JSONObject getJson(String url) throws Exception {
