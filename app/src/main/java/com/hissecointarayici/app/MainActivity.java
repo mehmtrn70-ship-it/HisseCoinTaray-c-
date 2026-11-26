@@ -1807,6 +1807,22 @@ public class MainActivity extends Activity {
         JSONObject r=root.getJSONObject("chart").getJSONArray("result").getJSONObject(0);
         JSONObject meta=r.getJSONObject("meta");
         double price=meta.optDouble("regularMarketPrice",Double.NaN);
+        long marketTime=meta.optLong("regularMarketTime",0L)*1000L;
+        long now=System.currentTimeMillis();
+        long marketAge=marketTime>0?now-marketTime:Long.MAX_VALUE;
+        JSONObject periods=meta.optJSONObject("currentTradingPeriod");
+        JSONObject regular=periods==null?null:periods.optJSONObject("regular");
+        long sessionStart=regular==null?0L:regular.optLong("start",0L)*1000L;
+        long sessionEnd=regular==null?0L:regular.optLong("end",0L)*1000L;
+        boolean regularSessionOpen=sessionStart>0 && sessionEnd>sessionStart
+                && now>=sessionStart && now<sessionEnd;
+        if(regular==null && marketTime>0)
+            regularSessionOpen=marketAge>=0 && marketAge<2L*60L*60L*1000L;
+        if(price<=0 || Double.isNaN(price) || Double.isInfinite(price)
+                || marketTime<=0 || marketAge < -5L*60L*1000L
+                || (regularSessionOpen && marketAge>30L*60L*1000L)
+                || (!regularSessionOpen && marketAge>10L*24L*60L*60L*1000L))
+            throw new Exception("Yahoo hisse fiyatı güncel değil: "+name);
         JSONArray close=r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("close");
         ArrayList<Double> c=toList(close);
         if(Double.isNaN(price) && !c.isEmpty()) price=c.get(c.size()-1);
@@ -1816,7 +1832,7 @@ public class MainActivity extends Activity {
         ArrayList<Double> lows=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("low"));
         ArrayList<Double> vols=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("volume"));
         double a=atr(highs,lows,c,14), sup=recentLow(lows,20), res=recentHigh(highs,20);
-        return new Quote(name,format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res,false);
+        return new Quote(name,format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols,regularSessionOpen),a,sup,res,false);
     }
 
     private String[] discoverCoins(int limit) throws Exception {
@@ -1853,10 +1869,11 @@ public class MainActivity extends Activity {
                 || closeTime<=0 || quoteAge < -5L*60L*1000L || quoteAge > 15L*60L*1000L)
             throw new Exception("Binance fiyatı güncel değil: "+symbol);
         JSONArray k=getJsonArray("https://api.binance.com/api/v3/klines?symbol="+symbol+"&interval=1d&limit=60");
-        ArrayList<Double> c=new ArrayList<>(), highs=new ArrayList<>(), lows=new ArrayList<>(), vols=new ArrayList<>();
-        for(int i=0;i<k.length();i++){ JSONArray row=k.getJSONArray(i); highs.add(row.getDouble(2)); lows.add(row.getDouble(3)); c.add(row.getDouble(4)); vols.add(row.getDouble(5)); }
+        ArrayList<Double> c=new ArrayList<>(), highs=new ArrayList<>(), lows=new ArrayList<>(), quoteVolumes=new ArrayList<>();
+        for(int i=0;i<k.length();i++){ JSONArray row=k.getJSONArray(i); highs.add(row.getDouble(2)); lows.add(row.getDouble(3)); c.add(row.getDouble(4)); quoteVolumes.add(row.getDouble(7)); }
         double a=atr(highs,lows,c,14), sup=recentLow(lows,20), res=recentHigh(highs,20);
-        Quote quote = new Quote(symbol.replace("USDT",""),format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res,true);
+        double current24hQuoteVolume=t.optDouble("quoteVolume",0.0);
+        Quote quote = new Quote(symbol.replace("USDT",""),format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(current24hQuoteVolume,quoteVolumes),a,sup,res,true);
         double rate = getUsdtTryRate();
         quote.tryPrice = rate > 0 ? price * rate : 0.0;
         return quote;
@@ -2054,12 +2071,24 @@ public class MainActivity extends Activity {
         return ema(a,12)-ema(a,26);
     }
 
-    private double volumeRatio(ArrayList<Double> v) {
-        if(v.size()<21) return 1.0;
-        double avg=0;
-        for(int i=v.size()-21;i<v.size()-1;i++) avg+=v.get(i);
+    private double volumeRatio(ArrayList<Double> v, boolean excludeLastIncomplete) {
+        int end=v.size()-(excludeLastIncomplete?1:0);
+        if(end<21) return 1.0;
+        double current=v.get(end-1), avg=0;
+        for(int i=end-21;i<end-1;i++) avg+=v.get(i);
         avg/=20.0;
-        return avg>0?v.get(v.size()-1)/avg:1.0;
+        return avg>0?current/avg:1.0;
+    }
+
+    private double volumeRatio(double current24hQuoteVolume, ArrayList<Double> completedDailyQuoteVolumes) {
+        // Binance ticker volume is rolling 24h quote volume; compare it with completed daily
+        // quote-volume candles, never with the still-forming UTC daily candle.
+        int end=completedDailyQuoteVolumes.size()-1;
+        if(current24hQuoteVolume<=0 || end<20) return 1.0;
+        double avg=0;
+        for(int i=end-20;i<end;i++) avg+=completedDailyQuoteVolumes.get(i);
+        avg/=20.0;
+        return avg>0?current24hQuoteVolume/avg:1.0;
     }
 
     private double sma(ArrayList<Double> a,int n) {
