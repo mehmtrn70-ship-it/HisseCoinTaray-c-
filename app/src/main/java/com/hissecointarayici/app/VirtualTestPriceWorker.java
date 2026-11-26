@@ -131,7 +131,9 @@ public class VirtualTestPriceWorker extends Worker {
         if (updated > 0 && "periodic".equals(triggerType)) {
             postAuditNotification(updated, test.length(), completedAt);
         }
-        return failed > 0 ? Result.retry() : Result.success();
+        // A missing price for one asset must not hold the unique immediate worker in
+        // exponential backoff. Keep that asset pending; the next periodic pass retries it.
+        return Result.success();
     }
 
 
