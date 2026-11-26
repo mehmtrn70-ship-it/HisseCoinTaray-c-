@@ -1999,15 +1999,24 @@ public class MainActivity extends Activity {
     }
 
     private double atr(ArrayList<Double> highs, ArrayList<Double> lows, ArrayList<Double> closes, int n) {
-        if(highs.size()<2 || lows.size()<2 || closes.size()<2) return 0;
-        int start=Math.max(1,closes.size()-n);
-        double sum=0; int count=0;
-        for(int i=start;i<closes.size() && i<highs.size() && i<lows.size();i++){
+        int size=Math.min(closes.size(),Math.min(highs.size(),lows.size()));
+        if(n<=0 || size<=n) return 0;
+        // ATR14 uses Wilder's RMA smoothing, not a simple average of only the latest 14 bars.
+        double value=0;
+        for(int i=1;i<=n;i++){
             double prev=closes.get(i-1);
-            double tr=Math.max(highs.get(i)-lows.get(i),Math.max(Math.abs(highs.get(i)-prev),Math.abs(lows.get(i)-prev)));
-            if(tr>0){sum+=tr;count++;}
+            double tr=Math.max(highs.get(i)-lows.get(i),
+                    Math.max(Math.abs(highs.get(i)-prev),Math.abs(lows.get(i)-prev)));
+            value+=tr;
         }
-        return count>0?sum/count:0;
+        value/=n;
+        for(int i=n+1;i<size;i++){
+            double prev=closes.get(i-1);
+            double tr=Math.max(highs.get(i)-lows.get(i),
+                    Math.max(Math.abs(highs.get(i)-prev),Math.abs(lows.get(i)-prev)));
+            value=(value*(n-1)+tr)/n;
+        }
+        return value;
     }
 
     private double recentLow(ArrayList<Double> a,int n){
@@ -2053,10 +2062,26 @@ public class MainActivity extends Activity {
     }
 
     private double rsi(ArrayList<Double> a) {
-        if(a.size()<15)return 50; double gain=0,loss=0;
-        int start=Math.max(1,a.size()-14);
-        for(int i=start;i<a.size();i++){double d=a.get(i)-a.get(i-1); if(d>0)gain+=d;else loss-=d;}
-        if(loss==0)return 100; double rs=(gain/14)/(loss/14); return 100-(100/(1+rs));
+        if(a.size()<15)return 50;
+        // Standard 14-period Wilder RSI, using the available history for stable smoothing.
+        double avgGain=0,avgLoss=0;
+        for(int i=1;i<=14;i++){
+            double change=a.get(i)-a.get(i-1);
+            if(change>0)avgGain+=change;
+            else avgLoss-=change;
+        }
+        avgGain/=14.0;
+        avgLoss/=14.0;
+        for(int i=15;i<a.size();i++){
+            double change=a.get(i)-a.get(i-1);
+            double gain=Math.max(0,change);
+            double loss=Math.max(0,-change);
+            avgGain=(avgGain*13.0+gain)/14.0;
+            avgLoss=(avgLoss*13.0+loss)/14.0;
+        }
+        if(avgLoss==0)return avgGain==0?50:100;
+        double rs=avgGain/avgLoss;
+        return 100.0-100.0/(1.0+rs);
     }
 
     private String format(double x){return String.format(Locale.US,"%.4f",x);}
