@@ -1830,6 +1830,11 @@ public class MainActivity extends Activity {
     private Quote fetchBinance(String symbol) throws Exception {
         JSONObject t=getJson("https://api.binance.com/api/v3/ticker/24hr?symbol="+symbol);
         double price=t.getDouble("lastPrice"), change=t.getDouble("priceChangePercent");
+        long closeTime=t.optLong("closeTime",0L);
+        long quoteAge=closeTime>0?System.currentTimeMillis()-closeTime:Long.MAX_VALUE;
+        if(price<=0 || Double.isNaN(price) || Double.isInfinite(price)
+                || closeTime<=0 || quoteAge < -5L*60L*1000L || quoteAge > 15L*60L*1000L)
+            throw new Exception("Binance fiyatı güncel değil: "+symbol);
         JSONArray k=getJsonArray("https://api.binance.com/api/v3/klines?symbol="+symbol+"&interval=1d&limit=60");
         ArrayList<Double> c=new ArrayList<>(), highs=new ArrayList<>(), lows=new ArrayList<>(), vols=new ArrayList<>();
         for(int i=0;i<k.length();i++){ JSONArray row=k.getJSONArray(i); highs.add(row.getDouble(2)); lows.add(row.getDouble(3)); c.add(row.getDouble(4)); vols.add(row.getDouble(5)); }
