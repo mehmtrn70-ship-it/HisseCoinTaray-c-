@@ -1992,26 +1992,39 @@ public class MainActivity extends Activity {
     }
 
     private JSONObject getJson(String url) throws Exception {
-        HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
-        c.setConnectTimeout(NETWORK_TIMEOUT_MS); c.setReadTimeout(NETWORK_TIMEOUT_MS);
-        c.setRequestProperty("User-Agent","Mozilla/5.0 HisseCoinTarayici/3.0");
-        int code=c.getResponseCode();
-        if(code<200 || code>=300) throw new Exception("HTTP "+code);
-        BufferedReader br=new BufferedReader(new InputStreamReader(c.getInputStream()));
-        StringBuilder sb=new StringBuilder(); String line;
-        while((line=br.readLine())!=null) sb.append(line);
-        br.close(); c.disconnect();
-        return new JSONObject(sb.toString());
+        HttpURLConnection c=null;
+        try {
+            c=(HttpURLConnection)new URL(url).openConnection();
+            c.setConnectTimeout(NETWORK_TIMEOUT_MS); c.setReadTimeout(NETWORK_TIMEOUT_MS);
+            c.setRequestProperty("User-Agent","Mozilla/5.0 HisseCoinTarayici/3.0");
+            int code=c.getResponseCode();
+            if(code<200 || code>=300) throw new Exception("HTTP "+code);
+            try(BufferedReader br=new BufferedReader(new InputStreamReader(c.getInputStream(),"UTF-8"))) {
+                StringBuilder sb=new StringBuilder(); String line;
+                while((line=br.readLine())!=null) sb.append(line);
+                return new JSONObject(sb.toString());
+            }
+        } finally {
+            if(c!=null) c.disconnect();
+        }
     }
 
     private JSONArray getJsonArray(String url) throws Exception {
-        HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
-        c.setConnectTimeout(10000); c.setReadTimeout(15000);
-        c.setRequestProperty("User-Agent","Mozilla/5.0 HisseCoinTarayici/3.0");
-        int code=c.getResponseCode(); if(code<200||code>=300) throw new Exception("HTTP "+code);
-        BufferedReader br=new BufferedReader(new InputStreamReader(c.getInputStream()));
-        StringBuilder sb=new StringBuilder(); String line; while((line=br.readLine())!=null) sb.append(line);
-        br.close(); c.disconnect(); return new JSONArray(sb.toString());
+        HttpURLConnection c=null;
+        try {
+            c=(HttpURLConnection)new URL(url).openConnection();
+            c.setConnectTimeout(10000); c.setReadTimeout(15000);
+            c.setRequestProperty("User-Agent","Mozilla/5.0 HisseCoinTarayici/3.0");
+            int code=c.getResponseCode();
+            if(code<200||code>=300) throw new Exception("HTTP "+code);
+            try(BufferedReader br=new BufferedReader(new InputStreamReader(c.getInputStream(),"UTF-8"))) {
+                StringBuilder sb=new StringBuilder(); String line;
+                while((line=br.readLine())!=null) sb.append(line);
+                return new JSONArray(sb.toString());
+            }
+        } finally {
+            if(c!=null) c.disconnect();
+        }
     }
 
     private ArrayList<Double> toList(JSONArray a) {
