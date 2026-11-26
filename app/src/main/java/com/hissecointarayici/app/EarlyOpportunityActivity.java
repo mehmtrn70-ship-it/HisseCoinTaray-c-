@@ -103,14 +103,17 @@ public class EarlyOpportunityActivity extends Activity {
                     double tickerPrice=t.optDouble("lastPrice",0);
                     long tickerTime=t.optLong("closeTime",0L);
                     long tickerAge=tickerTime>0 ? tickerSnapshotAt-tickerTime : Long.MAX_VALUE;
-                    if(symbol.endsWith("USDT") && tickerPrice>0
+                    boolean freshTicker = tickerPrice>0
                             && !Double.isNaN(tickerPrice) && !Double.isInfinite(tickerPrice)
                             && tickerTime>0 && tickerAge>=-MAX_FUTURE_SKEW_MS
-                            && tickerAge<=MAX_TICKER_AGE_MS)
+                            && tickerAge<=MAX_TICKER_AGE_MS;
+                    if(symbol.endsWith("USDT") && freshTicker)
                         livePrices.put(symbol,tickerPrice);
                     double quoteVol=t.optDouble("quoteVolume",0);
                     String base = symbol.endsWith("USDT") ? symbol.substring(0, symbol.length()-4) : "";
-                    if(symbol.endsWith("USDT") && !base.isEmpty()
+                    // Aday evrenine yalnızca güncel ve geçerli işlem fiyatı olan pariteleri al.
+                    // Böylece eski ticker fiyatı kartta aday fiyatı veya teyit girdisi olamaz.
+                    if(symbol.endsWith("USDT") && freshTicker && !base.isEmpty()
                         && !isStableBase(base) && !isMetalBase(base) && !isLeveragedToken(base)
                         && quoteVol>0 && !Double.isNaN(quoteVol) && !Double.isInfinite(quoteVol)
                         && !Double.isNaN(change) && !Double.isInfinite(change)
@@ -212,14 +215,15 @@ public class EarlyOpportunityActivity extends Activity {
         double rsi15=rsi(a.close), rsi1h=rsi(b.close);
         double vol15=ratio(a.volume), vol1h=ratio(b.volume);
         double low=recentLow(a.low,40);
-        double supportDistance=low>0?(last/low-1)*100:999;
+        // Kartta gösterilen canlı ticker fiyatı ile destek/direnç mesafelerini aynı referansa bağla.
+        double supportDistance=low>0?(displayPrice/low-1)*100:999;
         boolean nearSupport=supportDistance>=0 && supportDistance<=2.5;
         boolean hammer=isHammer(a,n-1);
         boolean engulf=isBullishEngulfing(a,n-1);
         boolean morning=isMorningStar(a,n-1);
         boolean divergence=positiveRsiDivergence(a.close);
         double resistance=highest(a.high,Math.max(0,n-21),n-1);
-        double resistanceDistance=resistance>0?(resistance/last-1)*100:999;
+        double resistanceDistance=resistance>0?(resistance/displayPrice-1)*100:999;
         double rsi1hPrevious=rsiAt(b.close,b.close.size()-5);
         boolean hourlyRsiRising=rsi1h>=rsi1hPrevious+1.0;
         double last1h=b.close.get(b.close.size()-1);
