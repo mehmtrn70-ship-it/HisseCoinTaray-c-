@@ -62,20 +62,24 @@ public class EarlyOpportunityActivity extends Activity {
         scroll.setFillViewport(true);
         scroll.setClipToPadding(false);
         scroll.setVerticalScrollBarEnabled(true);
-        // Tarama butonu kaydirma alaninin disinda sabit durur; son kart icin kucuk alt pay.
+        // Tarama butonu adaylarla ayni kaydirma alaninda, listenin en basinda yer alir.
+        // Kullanici asagi indikce buton da yukari kaybolur; kartlarin ustune binmez.
         scroll.setPadding(0,0,0,dp(8));
+        LinearLayout listContent = new LinearLayout(this);
+        listContent.setOrientation(LinearLayout.VERTICAL);
+        listContent.setPadding(0,0,0,dp(12));
         results = new LinearLayout(this); results.setOrientation(LinearLayout.VERTICAL);
         results.setPadding(0,0,0,dp(12));
         results.setClipToPadding(false);
         results.setClipChildren(false);
-        scroll.addView(results);
-        root.setClipToPadding(false);
-        root.setClipChildren(false);
-        // Tarama butonu coin listesinin hemen ustunde ve kaydirma alaninin disinda kalir.
         LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(-1,-2);
         scanParams.topMargin = dp(4);
         scanParams.bottomMargin = dp(8);
-        root.addView(scan,scanParams);
+        listContent.addView(scan,scanParams);
+        listContent.addView(results,new LinearLayout.LayoutParams(-1,-2));
+        scroll.addView(listContent);
+        root.setClipToPadding(false);
+        root.setClipChildren(false);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
         scan.setOnClickListener(v -> startScan());
