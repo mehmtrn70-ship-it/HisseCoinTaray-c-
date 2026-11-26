@@ -224,7 +224,8 @@ public class EarlyOpportunityActivity extends Activity {
         boolean divergence=positiveRsiDivergence(a.close);
         double resistance=highest(a.high,Math.max(0,n-21),n-1);
         double resistanceDistance=resistance>0?(resistance/displayPrice-1)*100:999;
-        double rsi1hPrevious=rsiAt(b.close,b.close.size()-5);
+        // Compare the latest closed 1h RSI with the immediately preceding closed 1h candle.
+        double rsi1hPrevious=rsiAt(b.close,b.close.size()-1);
         boolean hourlyRsiRising=rsi1h>=rsi1hPrevious+1.0;
         double last1h=b.close.get(b.close.size()-1);
         double sma20=sma(b.close,20), sma50=sma(b.close,50);
