@@ -2061,9 +2061,14 @@ public class MainActivity extends Activity {
     }
 
     private double ema(ArrayList<Double> a,int n) {
-        if(a.isEmpty()) return 0;
-        double e=a.get(0), k=2.0/(n+1);
-        for(int i=1;i<a.size();i++) e=a.get(i)*k+e*(1-k);
+        if(a.isEmpty() || n<=0) return 0;
+        if(a.size()<n) return a.get(a.size()-1);
+        // Standard EMA initialization: seed with the first n-period SMA.
+        double e=0;
+        for(int i=0;i<n;i++) e+=a.get(i);
+        e/=n;
+        double k=2.0/(n+1);
+        for(int i=n;i<a.size();i++) e=a.get(i)*k+e*(1-k);
         return e;
     }
 
