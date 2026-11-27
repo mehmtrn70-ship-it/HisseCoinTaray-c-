@@ -56,6 +56,9 @@ public class MainActivity extends Activity {
     // USDT'nin TL karşılığı yaklaşık USD/TRY kuru ile hesaplanır; bu bir borsa TRY fiyatı değildir.
     private volatile double usdtTryRate = 0.0;
     private volatile long usdtTryRateUpdatedAt = 0L;
+    private volatile long usdtTryRateLastAttemptAt = 0L;
+    private volatile boolean checkingUsdtTryRate = false;
+    private volatile String lastUsdtTryRateError = "";
 
     private static final String[] BIST100 = ("ASELS,TUPRS,BIMAS,THYAO,AKBNK,EREGL,YKBNK,KCHOL,ISCTR,SAHOL,TCELL,ASTOR,GARAN,CCOLA,ENKAI,SISE,TAVHL,FROTO,MGROS,SASA,TRALT,EKGYO,AEFES,MPARK,TOASO,KRDMD,PGSUS,GUBRF,HALKB,ENERY,ENJSA,TURSG,PETKM,TTKOM,GLYHO,AGHOL,TRMET,MAVI,TKFEN,VAKBN,TRGYO,OYAKC,AHGAZ,BRSAN,AKSEN,TABGD,DOHOL,ANSGR,SOKM,RGYAS,AYGAZ,ALARK,CIMSA,RYSAS,ULKER,AKSA,ISMEN,DOAS,CVKMD,OTKAR,GLRMK,TSKB,ARCLK,HEKTS,TTRAK,ISDMR,TRENJ,ALBRK,ECILC,CANTE,CWENE,ANHYT,TCKRC,BTCIM,AKFYE,SNGYO,GRSEL,ODAS,BRYAT,EGEEN,ECZYT,BERA,FENER,KCAER,ALTNY,EGGUB,LMKDC,PAHOL,ENTRA,ZOREN,OBAMS,GWIND,KARSN,KORDS,EUREN,BINHO,VESTL,KATMR,AKCNS,ALFAS").split(",");
     private static final String[] BIST_EXTRA = ("AKENR,AKFGY,AKSGY,AKYHO,ATATP,ATLAS,AVHOL,AVOD,AYDEM,AYEN,BAKAB,BANVT,BASGZ,BAYRK,BEGYO,BIGCH,BIOEN,BJKAS,BLCYT,BMSCH,BNTAS,BORLS,BRISA,BRKO,BRKSN,BRKVY,BRLSM,BRSAN,BSOKE,BUCIM,BULGS,BURCE,BURVA,CEMAS,CEMTS,CEOEM,COSMO,CRDFA,CUSAN,DAGI,TRHOL,DAPGM,DARDL,DCTTR,DERHL,DERIM,DESA,DESPC,DEVA,DITAS,DMSAS,DOBUR,DURDO,DYOBY,EDATA,EDIP,EFORC,EGPRO,EGSER,EKIZ,ELITE,EMKEL,EMNIS,ENDAE,ENSRI,ERBOS,ERCB,ERSU,ESCAR,ESCOM,ESEN,ETILR,EUPWR,EYGYO,FADE,FONET,FORMT,FORTE,FRIGO, GEDIK,GENTS,GEREL,GLBMD,GLCVY,GOODY,GRNYO,GSDDE,GSDHO,GTYGR,GUNDG,HATEK,HATSN,HDFGS,HEDEF,HKTM,HRKET,IDGYO,IEYHO,IHAAS,IHEVA,IHGZT,IHYAY,IMASM,INDES,INFO,INGRM,INTEM,INVEO,ISBIR,ISBTR,ISFIN,ISKPL,ISKUR,ISSEN,IZENR,IZFAS,IZINV,IZMDC,JANTS,KAPLM,KAREL,KARTN,KATMR,KAYSE,KENT,KERVN,KFEIN,KIMMR,KLGYO,KLKIM,KLMSN,KLNMA,KLRHO,KLSER,KLSYN,KMPUR,KNFRT,KONKA,KONTR,KONYA,KOPOL,KOTON,KRDMA,KRDMB,KRGYO,KRVGD,KSTUR,KUTPO,KUVVA,KZBGY,LIDER,LILAK,LKMNH,LOGO,LUKSK,MAALT,MACKO,MAKIM,MANAS,MARKA,MARTI,MATAS,MEDTR,MEGAP,MEGMT,MERCN,METRO,METUR,MHRGY,MIPAZ,MMCAS,MNDRS,MNDTR,MOBTL,MRGYO,MRSHL,MSGYO,MTRKS,MZHLD,NATEN,NETAS,NIBAS,NTGAZ,NUHCM,OBAMS,OBASE,ONCSM,ORGE,ORMA,OSMEN,OSTIM,OTTO,OYLUM,OZATD,OZGYO,OZKGY,OZRDN,OZSUB,OZYSR,PAGYO,PAMEL,PAPIL,PARSN,PASEU,PCILT,PEKGY,PENGD,PENTA,PETUN,PINSU,PKART,PKENT,PLTUR,PNLSN,PNSUT,POLHO,POLTK,PRDGS,PRKAB,PRKME,PRZMA,PSDTC,QNBFK,QNBTR,RALYH,RAYSG,REEDR,REKOR,RGYAS,RODRG,RTALB,RUBNS,RUZYE,RYGYO,SAMAT,SANEL,SANFM,SANKO,SARKY,SAYAS,SDTTR,SEGMN,SEKFK,SEKUR,SELEC,SELGD,SELVA,SERNT,SEYKM,SILVR,SKBNK,SKTAS,SMART,SMRTG,SMRVA,SNGYO,SNICA,SNPAM,SODSN,SONME,SRVGY,SUNTK,SURGY,SUWEN,TARKM,TATEN,TATGD,TAVHL,TBORG,TDGYO,TEKTU,TERA,TETMT,TGSAS,TKNSA,TLMAN,TMSN,TNZTP,TRCAS,TRILC,TSGYO,TSKB,TUCLK,TUKAS,TUREX,UFUK,ULAS,ULUFA,ULUSE,ULUUN,UNLU,USAK,VAKFA,VAKFN,VAKKO,VERTU,VERUS,VESBE,VKFYO,VKGYO,VKING,VRGYO,YAPRK,YATAS,YAYLA,YEOTK,YESIL,YGGYO,YIGIT,YKSLN,YUNSA,ZEDUR,ZRGYO").replace(" GEDIK","GEDIK").split(",");
@@ -79,6 +82,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
+        VirtualTestBackgroundScheduler.ensureScheduled(this);
         createSignalNotificationChannel();
         buildUi();
         loadAll();
@@ -170,6 +174,11 @@ public class MainActivity extends Activity {
         virtualTestParams.setMargins(0, 0, 0, dp(8));
         root.addView(virtualTestBtn, virtualTestParams);
         virtualTestBtn.setOnClickListener(v -> showVirtualSignalTest());
+        Button earlyOpportunityBtn = makeButton("🚀 ERKEN FIRSAT AVCISI • 300 PARİTE");
+        LinearLayout.LayoutParams earlyOpportunityParams = new LinearLayout.LayoutParams(-1, -2);
+        earlyOpportunityParams.setMargins(0, 0, 0, dp(8));
+        root.addView(earlyOpportunityBtn, earlyOpportunityParams);
+        earlyOpportunityBtn.setOnClickListener(v -> startActivity(new Intent(this, EarlyOpportunityActivity.class)));
         LinearLayout alertRow = new LinearLayout(this);
         alertRow.setGravity(Gravity.CENTER);
         alertRow.addView(alertsBtn, new LinearLayout.LayoutParams(-1, -2));
@@ -950,9 +959,59 @@ public class MainActivity extends Activity {
     private static final double VIRTUAL_TEST_PER_SIGNAL = 2000.0;
 
     private void showVirtualSignalTest() {
+        ensureBackgroundAuditNotificationPermission();
         JSONArray test;
         try { test = new JSONArray(paperPrefs().getString("virtual_signal_test", "[]")); }
         catch (Exception e) { test = new JSONArray(); }
+
+        boolean needsFxRate = false;
+        if (test.length() > 0) {
+            for (int i = 0; i < test.length(); i++) {
+                JSONObject item = test.optJSONObject(i);
+                if (item != null && item.optBoolean("coin", false)) { needsFxRate = true; break; }
+            }
+        } else if (latestScans != null) {
+            for (Scan candidate : latestScans) {
+                if (candidate != null && candidate.q != null && candidate.q.coin && candidate.q.price > 0) {
+                    needsFxRate = true;
+                    break;
+                }
+            }
+        }
+        boolean fxNeedsRefresh = usdtTryRate <= 0 || usdtTryRateUpdatedAt <= 0
+                || System.currentTimeMillis() - usdtTryRateUpdatedAt >= AUTO_REFRESH_MS;
+        if (needsFxRate && fxNeedsRefresh) {
+            if (checkingUsdtTryRate) return;
+            checkingUsdtTryRate = true;
+            final JSONArray existingTest = test;
+            final boolean hadExistingTest = test.length() > 0;
+            android.app.ProgressDialog progress = new android.app.ProgressDialog(this);
+            progress.setMessage("USDT/TL kuru güvenli kaynaklardan alınıyor...");
+            progress.setCancelable(false);
+            progress.show();
+            refreshPool.execute(() -> {
+                double rate = getUsdtTryRate();
+                runOnUiThread(() -> {
+                    checkingUsdtTryRate = false;
+                    if (isFinishing()) { if (progress.isShowing()) progress.dismiss(); return; }
+                    if (progress.isShowing()) progress.dismiss();
+                    if (rate > 0) {
+                        showVirtualSignalTest();
+                    } else if (hadExistingTest) {
+                        renderVirtualSignalTest(existingTest);
+                    } else {
+                        String detail = lastUsdtTryRateError == null || lastUsdtTryRateError.isEmpty()
+                                ? "Yahoo, Open ER API ve Frankfurter kaynaklarından geçerli kur alınamadı."
+                                : lastUsdtTryRateError;
+                        new android.app.AlertDialog.Builder(this).setTitle("Kur verisi alınamadı")
+                                .setMessage("Yeni sanal test başlatılmadı. Mevcut kayıtlar korunuyor. " + detail)
+                                .setPositiveButton("TAMAM", null).show();
+                    }
+                });
+            });
+            return;
+        }
+
         if (test.length() == 0) {
             if (latestScans == null || latestScans.isEmpty()) {
                 new android.app.AlertDialog.Builder(this).setTitle("Sanal Sinyal Testi")
@@ -988,7 +1047,9 @@ public class MainActivity extends Activity {
                     item.put("horizonCaptureVersion", 1);
                     item.put("allocationTL", VIRTUAL_TEST_PER_SIGNAL);
                     double testRate = scan.q.coin ? getUsdtTryRate() : 1.0;
-                    item.put("quantity", VIRTUAL_TEST_PER_SIGNAL / ((scan.q.coin && testRate > 0 ? testRate : 1.0) * scan.q.price));
+                    if (scan.q.coin && testRate <= 0) throw new IllegalStateException("USDT/TL kuru yok; sanal miktar hesaplanamadı.");
+                    item.put("entryFxRate", testRate);
+                    item.put("quantity", VIRTUAL_TEST_PER_SIGNAL / (testRate * scan.q.price));
                     item.put("currency", currencyFor(scan.q.coin));
                     created.put(item);
                 } catch (Exception ignored) { }
@@ -1006,7 +1067,49 @@ public class MainActivity extends Activity {
         renderVirtualSignalTest(test);
     }
 
+    private void ensureBackgroundAuditNotificationPermission() {
+        if (Build.VERSION.SDK_INT < 33 ||
+                checkSelfPermission("android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED) return;
+        android.content.SharedPreferences settings = getSharedPreferences("hisse_coin_paper_v1", MODE_PRIVATE);
+        if (settings.getBoolean("virtual_test_bg_notification_permission_asked", false)) return;
+        settings.edit().putBoolean("virtual_test_bg_notification_permission_asked", true).apply();
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Arka plan kontrol bildirimi")
+                .setMessage("Sanal test fiyat kontrolü uygulama kapalıyken başarılı olduğunda bildirim gösterilsin mi? Bildirim izni verilmezse fiyat kaydı yine yapılır; yalnızca bildirim gösterilemez.")
+                .setPositiveButton("İZİN VER", (dialog, which) ->
+                        requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, NOTIFICATION_PERMISSION_REQUEST))
+                .setNegativeButton("ŞİMDİ DEĞİL", null)
+                .show();
+    }
+
+    private String backgroundCaptureStatusText() {
+        android.content.SharedPreferences p = getSharedPreferences("hisse_coin_paper_v1", MODE_PRIVATE);
+        long lastAttempt = p.getLong("virtual_test_bg_last_attempt", 0L);
+        long lastSuccess = p.getLong("virtual_test_bg_last_success", 0L);
+        int count = p.getInt("virtual_test_bg_last_count", 0);
+        String error = p.getString("virtual_test_bg_last_error", "");
+        java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("dd.MM HH:mm", Locale.getDefault());
+        String successText = lastSuccess > 0 ? fmt.format(new Date(lastSuccess)) : "henüz yok";
+        String attemptText = lastAttempt > 0 ? fmt.format(new Date(lastAttempt)) : "henüz çalışmadı";
+        boolean notificationAllowed = Build.VERSION.SDK_INT < 33 ||
+                checkSelfPermission("android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED;
+        StringBuilder statusText = new StringBuilder();
+        statusText.append("Arka plan fiyat kontrolü: ")
+                .append(lastSuccess > 0 ? "son başarılı " + successText + " • " + count + " varlık" : "henüz başarılı kayıt yok")
+                .append("\nSon deneme: ").append(attemptText)
+                .append("\nBildirim izni: ").append(notificationAllowed ? "açık" : "kapalı");
+        if (!error.isEmpty()) statusText.append("\nSon kontrol uyarısı: ").append(error);
+        long notificationAt = p.getLong("virtual_test_bg_notification_last_at", 0L);
+        String detail = p.getString("virtual_test_bg_notification_last_detail", "");
+        statusText.append("\nSon bildirim kaydı: ")
+                .append(notificationAt > 0 ? fmt.format(new Date(notificationAt)) : "henüz yok");
+        if (!detail.isEmpty()) statusText.append(" • ").append(detail);
+        return statusText.toString();
+    }
+
     private void updateVirtualSignalTestPrices(ArrayList<Scan> scans) {
+        // Serialize foreground updates with the background worker's read/merge/write cycle.
+        synchronized (MainActivity.class) {
         JSONArray test;
         try { test = new JSONArray(paperPrefs().getString("virtual_signal_test", "[]")); }
         catch (Exception e) { return; }
@@ -1036,9 +1139,15 @@ public class MainActivity extends Activity {
                             long target = days * day;
                             // Capture the first available real price at or after each target.
                             // Do not impose a narrow window that can be missed between scans.
-                            if (!item.has(priceKey) && elapsed >= target) {
+                            if ((!item.has(priceKey) || item.optDouble(priceKey, 0) <= 0) && elapsed >= target) {
                                 item.put(priceKey, scan.q.price);
                                 item.put(timeKey, now);
+                                item.put("horizon" + days + "TargetTime", baseTime + target);
+                                item.put("horizon" + days + "ElapsedMs", elapsed);
+                                item.put("horizon" + days + "DelayMs", Math.max(0L, elapsed - target));
+                                item.put("horizon" + days + "Late", elapsed > target + 30L * 60L * 1000L);
+                                item.put("horizon" + days + "CaptureSource", "foreground_scan");
+                                item.remove("horizon" + days + "Missed");
                             }
                         }
                     }
@@ -1047,13 +1156,19 @@ public class MainActivity extends Activity {
                 break;
             }
         }
-        if (changed) paperPrefs().edit().putString("virtual_signal_test", test.toString()).apply();
+        if (changed) paperPrefs().edit().putString("virtual_signal_test", test.toString()).commit();
+        }
     }
 
     private void renderVirtualSignalTest(JSONArray test) {
         StringBuilder report = new StringBuilder();
         double totalPnlTL = 0, totalValueTL = 0, totalInvestedTL = 0;
-        int winners = 0, losers = 0;
+        boolean missingCryptoRate = false;
+        // One FX snapshot keeps all crypto positions on the same valuation basis.
+        double reportFxRate = (usdtTryRateUpdatedAt > 0
+                && System.currentTimeMillis() - usdtTryRateUpdatedAt <= 12L * 60L * 60L * 1000L)
+                ? usdtTryRate : 0.0;
+        int winners = 0, losers = 0, unvalued = 0;
         long start = Long.MAX_VALUE;
         for (int i = 0; i < test.length(); i++) {
             JSONObject item = test.optJSONObject(i);
@@ -1065,11 +1180,30 @@ public class MainActivity extends Activity {
             boolean coin = item.optBoolean("coin", false);
             long time = item.optLong("time", 0);
             if (time > 0) start = Math.min(start, time);
-            if (pnlNative > 0) winners++; else if (pnlNative < 0) losers++;
-            double pnlTL = coin ? pnlNative * getUsdtTryRate() : pnlNative;
-            totalPnlTL += pnlTL;
+            double pnlTL = 0;
+            String pnlTLText;
+            if (coin) {
+                if (reportFxRate <= 0 || qty <= 0) {
+                    missingCryptoRate = true;
+                    unvalued++;
+                    pnlTLText = "hesaplanamadı";
+                } else {
+                    // Current units are valued in TL; subtract their original TL allocation.
+                    // This includes token movement and the USDT/TRY exchange-rate movement.
+                    pnlTL = current * qty * reportFxRate - allocation;
+                    totalPnlTL += pnlTL;
+                    totalValueTL += allocation + pnlTL;
+                    if (pnlTL > 0) winners++; else if (pnlTL < 0) losers++;
+                    pnlTLText = String.format(Locale.US, "%+.2f TL", pnlTL);
+                }
+            } else {
+                pnlTL = pnlNative;
+                totalPnlTL += pnlTL;
+                totalValueTL += allocation + pnlTL;
+                if (pnlTL > 0) winners++; else if (pnlTL < 0) losers++;
+                pnlTLText = String.format(Locale.US, "%+.2f TL", pnlTL);
+            }
             totalInvestedTL += allocation;
-            totalValueTL += allocation + pnlTL;
             String entryStr = formatPortfolioPrice(entry, coin) + " " + currencyFor(coin);
             String currentStr = formatPortfolioPrice(current, coin) + " " + currencyFor(coin);
             report.append("\n").append(i + 1).append(". ").append(item.optString("name"))
@@ -1077,8 +1211,12 @@ public class MainActivity extends Activity {
                     .append("\n   Alış: ").append(entryStr).append(" | Güncel: ").append(currentStr)
                     .append("\n   Değişim: ").append(String.format(Locale.US, "%+.2f%%", pct))
                     .append(" | K/Z: ").append(String.format(Locale.US, "%+.2f", pnlNative)).append(" ").append(currencyFor(coin))
+                    .append(" (").append(pnlTLText).append(")")
                     .append("\n   1g / 3g / 7g: ").append(virtualTestHorizon(item, 1)).append(" / ")
-                    .append(virtualTestHorizon(item, 3)).append(" / ").append(virtualTestHorizon(item, 7)).append("\n");
+                    .append(virtualTestHorizon(item, 3)).append(" / ").append(virtualTestHorizon(item, 7))
+                    .append("\n   Ölçüm denetimi: ").append(virtualTestHorizonAudit(item, 1)).append(" | ")
+                    .append(virtualTestHorizonAudit(item, 3)).append(" | ")
+                    .append(virtualTestHorizonAudit(item, 7)).append("\n");
         }
         if (start == Long.MAX_VALUE) start = System.currentTimeMillis();
         long elapsed = Math.max(0, System.currentTimeMillis() - start);
@@ -1087,10 +1225,12 @@ public class MainActivity extends Activity {
                 + "Dağılım: Her sinyale 2.000 TL (en fazla 5 farklı varlık)\n"
                 + "Kayıtlı sinyal: " + test.length() + "/5\n"
                 + "Geçen süre: " + elapsedText + "\n"
-                + "Toplam K/Z: " + String.format(Locale.US, "%+.2f TL (yaklaşık)", totalPnlTL) + "\n"
-                + "Tahmini portföy değeri: " + String.format(Locale.US, "%.2f TL (yaklaşık)", totalValueTL) + "\n"
-                + "Kazanan / kaybeden: " + winners + " / " + losers
-                + "\n\n1g/3g/7g ölçümleri, yeterli sonraki fiyat kaydı oluşunca hesaplanır. Kripto TL karşılığı tahminidir; bu bir sanal testtir, gerçek emir gönderilmez.\n";
+                + "Toplam K/Z: " + (missingCryptoRate ? "kur verisi yok — hesaplanamadı" : String.format(Locale.US, "%+.2f TL (yaklaşık)", totalPnlTL)) + "\n"
+                + "Tahmini portföy değeri: " + (missingCryptoRate ? "kur verisi yok — hesaplanamadı" : String.format(Locale.US, "%.2f TL (yaklaşık)", totalValueTL)) + "\n"
+                + "Kazanan / kaybeden (TL): " + winners + " / " + losers
+                + (unvalued > 0 ? " • TL karşılığı hesaplanamayan: " + unvalued : "")
+                + "\n\n" + backgroundCaptureStatusText()
+                + "\n1g/3g/7g ölçümleri, yeterli sonraki fiyat kaydı oluşunca hesaplanır. Kripto TL karşılığı tahminidir; bu bir sanal testtir, gerçek emir gönderilmez.\n";
         TextView content = new TextView(this);
         content.setText(summary + report.toString());
         content.setTextSize(14);
@@ -1119,6 +1259,7 @@ public class MainActivity extends Activity {
         long baseTime = item.optLong("time", 0);
         double basePrice = item.optDouble("entry", 0);
         if (baseTime <= 0 || basePrice <= 0) return "veri yok";
+        long target = days * 24L * 60L * 60L * 1000L;
         String savedPriceKey = "horizon" + days + "Price";
         double savedPrice = item.optDouble(savedPriceKey, 0);
         if (savedPrice > 0) {
@@ -1129,11 +1270,14 @@ public class MainActivity extends Activity {
                 long actualElapsed = observedAt - baseTime;
                 long actualDays = actualElapsed / (24L * 60L * 60L * 1000L);
                 long actualHours = (actualElapsed % (24L * 60L * 60L * 1000L)) / (60L * 60L * 1000L);
-                timing = " (" + actualDays + "g " + actualHours + "sa)";
+                timing = " (" + actualDays + "g " + actualHours + "sa"
+                        + (item.optBoolean("horizon" + days + "Late", actualElapsed > target + 30L * 60L * 1000L) ? " • gecikmeli" : "")
+                        + ")";
+            } else {
+                timing = " (zaman doğrulanamadı)";
             }
             return String.format(Locale.US, "%+.2f%%", savedPct) + timing;
         }
-        long target = days * 24L * 60L * 60L * 1000L;
         long tolerance = 24L * 60L * 60L * 1000L;
         JSONArray history;
         try { history = new JSONArray(paperPrefs().getString("signal_history", "[]")); }
@@ -1158,7 +1302,70 @@ public class MainActivity extends Activity {
             return "bekleniyor";
         }
         double pct = (nearest.optDouble("price", 0) - basePrice) * 100.0 / basePrice;
-        return String.format(Locale.US, "%+.2f%%", pct);
+        long observedAt = nearest.optLong("time", 0L);
+        long actualElapsed = Math.max(0L, observedAt - baseTime);
+        long actualDays = actualElapsed / (24L * 60L * 60L * 1000L);
+        long actualHours = (actualElapsed % (24L * 60L * 60L * 1000L)) / (60L * 60L * 1000L);
+        return String.format(Locale.US, "%+.2f%%", pct)
+                + " (geçmiş kayıt • " + actualDays + "g " + actualHours + "sa)";
+    }
+
+    private String virtualTestHorizonAudit(JSONObject item, int days) {
+        String prefix = "horizon" + days;
+        double price = item.optDouble(prefix + "Price", 0.0);
+        boolean coin = item.optBoolean("coin", false);
+        if (price <= 0) {
+            return days + "g: doğrudan yakalama yok • " + virtualTestHorizon(item, days);
+        }
+        long baseTime = item.optLong("time", 0L);
+        long observedAt = item.optLong(prefix + "Time", 0L);
+        if (baseTime <= 0 || observedAt <= baseTime) {
+            return days + "g: " + formatPortfolioPrice(price, coin)
+                    + " " + currencyFor(coin) + " • zaman damgası doğrulanamadı";
+        }
+        long elapsed = item.optLong(prefix + "ElapsedMs", observedAt - baseTime);
+        if (elapsed <= 0) elapsed = observedAt - baseTime;
+        long target = days * 24L * 60L * 60L * 1000L;
+        long delay = item.optLong(prefix + "DelayMs", Math.max(0L, elapsed - target));
+        String stamp = new java.text.SimpleDateFormat("dd.MM HH:mm", Locale.getDefault())
+                .format(new Date(observedAt));
+        String source = item.optString(prefix + "CaptureSource", "");
+        String sourceLabel = "kayıt kaynağı bilinmiyor";
+        if ("app_capture".equals(source)) sourceLabel = "arka plan";
+        else if ("foreground_scan".equals(source)) sourceLabel = "uygulama taraması";
+        String quoteAge = "";
+        long exchangeTime = item.optLong(prefix + "ExchangeTime", 0L);
+        if (exchangeTime > 0 && observedAt >= exchangeTime) {
+            long ageMinutes = (observedAt - exchangeTime) / 60000L;
+            quoteAge = " • borsa verisi yaşı " + ageMinutes + "dk";
+        }
+        String basePriceText = formatAuditPrice(item.optDouble("entry", 0.0), coin);
+        String observedPriceText = formatAuditPrice(price, coin);
+        return days + "g: baz " + basePriceText + " → ölçüm " + observedPriceText
+                + " " + currencyFor(coin)
+                + " @ " + stamp + " • geçen " + formatHorizonDuration(elapsed)
+                + " • gecikme " + formatHorizonDuration(delay)
+                + " • " + sourceLabel + quoteAge
+                + (item.optBoolean(prefix + "Late", elapsed > target + 30L * 60L * 1000L) ? " • gecikmeli" : "");
+    }
+
+    private String formatAuditPrice(double value, boolean coin) {
+        if (!coin) return String.format(Locale.US, "%.4f", value);
+        String formatted = String.format(Locale.US, "%.8f", value);
+        while (formatted.indexOf(".") >= 0 && formatted.endsWith("0"))
+            formatted = formatted.substring(0, formatted.length() - 1);
+        if (formatted.endsWith(".")) formatted = formatted.substring(0, formatted.length() - 1);
+        return formatted;
+    }
+
+    private String formatHorizonDuration(long millis) {
+        long safe = Math.max(0L, millis);
+        long days = safe / 86400000L;
+        long hours = (safe % 86400000L) / 3600000L;
+        long minutes = (safe % 3600000L) / 60000L;
+        if (days > 0) return days + "g " + hours + "sa";
+        if (hours > 0) return hours + "sa " + minutes + "dk";
+        return minutes + "dk";
     }
 
     private void showSignalHistory() {
@@ -1541,22 +1748,39 @@ public class MainActivity extends Activity {
         showPaperPortfolio();
     }
 
+    private int[] scoreParts(Quote q) {
+        int changePoints = q.change>8?12:q.change>3?9:q.change>0?5
+                :q.change< -8?-12:q.change< -3?-9:q.change<0?-5:0;
+        int rsiPoints = q.rsi>=52 && q.rsi<=65?8:q.rsi>72?-10:q.rsi>=68?-4
+                :q.rsi<30?3:q.rsi<42?-3:0;
+        int smaPoints = q.sma>0?(q.price>q.sma?8:-8):0;
+        double macdPct = q.price>0?(q.macd/q.price)*100.0:0;
+        int macdPoints = macdPct>0.25?6:macdPct>0.05?3:macdPct< -0.25?-6:macdPct< -0.05?-3:0;
+        int volumePoints = q.volumeRatio>=2.0?6:q.volumeRatio>=1.3?4:q.volumeRatio<0.5?-5:0;
+        int resistancePoints = q.resistance>0 && q.price>q.resistance?4:0;
+        return new int[]{changePoints,rsiPoints,smaPoints,macdPoints,volumePoints,resistancePoints};
+    }
+
     private String reasonText(Quote q) {
-        ArrayList<String> r = new ArrayList<>();
-        if(q.change > 2) r.add("24s momentum güçlü");
-        else if(q.change > 0) r.add("24s değişim pozitif");
-        else if(q.change < -2) r.add("24s düşüş baskısı");
-        else r.add("24s hareket sınırlı");
-
-        if(q.rsi >= 50 && q.rsi <= 68) r.add("RSI dengeli");
-        else if(q.rsi > 72) r.add("RSI yüksek");
-        else if(q.rsi < 30) r.add("RSI düşük");
-        else r.add("RSI nötr");
-
-        if(q.sma > 0 && q.price > q.sma) r.add("fiyat SMA20 üzerinde");
-        else if(q.sma > 0) r.add("fiyat SMA20 altında");
-
-        return String.join(" • ", r);
+        int[] p=scoreParts(q);
+        int raw=50;
+        for(int value:p) raw+=value;
+        int finalScore=Math.max(10,Math.min(95,raw));
+        double macdPct=q.price>0?(q.macd/q.price)*100.0:0;
+        return "Başlangıç 50 puan"
+                +"\\n24s değişim ("+pct(q.change)+"): "+String.format(Locale.US,"%+d",p[0])
+                +" puan"
+                +"\\nRSI ("+String.format(Locale.US,"%.1f",q.rsi)+"): "+String.format(Locale.US,"%+d",p[1])
+                +" puan"
+                +"\\nSMA20 ("+(q.sma>0 && q.price>q.sma?"üzerinde":q.sma>0?"altında":"veri yok")+"): "+String.format(Locale.US,"%+d",p[2])
+                +" puan"
+                +"\\nMACD ("+String.format(Locale.US,"%+.3f%%",macdPct)+"): "+String.format(Locale.US,"%+d",p[3])
+                +" puan"
+                +"\\nHacim ("+String.format(Locale.US,"%.2fx",q.volumeRatio)+"): "+String.format(Locale.US,"%+d",p[4])
+                +" puan"
+                +"\\nDirenç kırılımı ("+(p[5]>0?"evet":"hayır")+"): "+String.format(Locale.US,"%+d",p[5])
+                +" puan"
+                +"\\nHam toplam: "+raw+" • Son skor: "+finalScore+"/100";
     }
 
     private String signal(double score) {
@@ -1583,16 +1807,33 @@ public class MainActivity extends Activity {
         JSONObject r=root.getJSONObject("chart").getJSONArray("result").getJSONObject(0);
         JSONObject meta=r.getJSONObject("meta");
         double price=meta.optDouble("regularMarketPrice",Double.NaN);
+        long marketTime=meta.optLong("regularMarketTime",0L)*1000L;
+        long now=System.currentTimeMillis();
+        long marketAge=marketTime>0?now-marketTime:Long.MAX_VALUE;
+        JSONObject periods=meta.optJSONObject("currentTradingPeriod");
+        JSONObject regular=periods==null?null:periods.optJSONObject("regular");
+        long sessionStart=regular==null?0L:regular.optLong("start",0L)*1000L;
+        long sessionEnd=regular==null?0L:regular.optLong("end",0L)*1000L;
+        boolean regularSessionOpen=sessionStart>0 && sessionEnd>sessionStart
+                && now>=sessionStart && now<sessionEnd;
+        if(regular==null && marketTime>0)
+            regularSessionOpen=marketAge>=0 && marketAge<2L*60L*60L*1000L;
         JSONArray close=r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("close");
         ArrayList<Double> c=toList(close);
-        if(Double.isNaN(price) && !c.isEmpty()) price=c.get(c.size()-1);
+        if((price<=0 || Double.isNaN(price) || Double.isInfinite(price)) && !c.isEmpty())
+            price=c.get(c.size()-1);
+        if(price<=0 || Double.isNaN(price) || Double.isInfinite(price)
+                || marketTime<=0 || marketAge < -5L*60L*1000L
+                || (regularSessionOpen && marketAge>30L*60L*1000L)
+                || (!regularSessionOpen && marketAge>10L*24L*60L*60L*1000L))
+            throw new Exception("Yahoo hisse fiyatı güncel değil: "+name);
         double prev=c.size()>1?c.get(c.size()-2):price;
         double change=prev!=0?(price-prev)*100/prev:0;
         ArrayList<Double> highs=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("high"));
         ArrayList<Double> lows=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("low"));
         ArrayList<Double> vols=toList(r.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).optJSONArray("volume"));
         double a=atr(highs,lows,c,14), sup=recentLow(lows,20), res=recentHigh(highs,20);
-        return new Quote(name,format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res,false);
+        return new Quote(name,format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols,regularSessionOpen),a,sup,res,false);
     }
 
     private String[] discoverCoins(int limit) throws Exception {
@@ -1623,11 +1864,17 @@ public class MainActivity extends Activity {
     private Quote fetchBinance(String symbol) throws Exception {
         JSONObject t=getJson("https://api.binance.com/api/v3/ticker/24hr?symbol="+symbol);
         double price=t.getDouble("lastPrice"), change=t.getDouble("priceChangePercent");
+        long closeTime=t.optLong("closeTime",0L);
+        long quoteAge=closeTime>0?System.currentTimeMillis()-closeTime:Long.MAX_VALUE;
+        if(price<=0 || Double.isNaN(price) || Double.isInfinite(price)
+                || closeTime<=0 || quoteAge < -5L*60L*1000L || quoteAge > 15L*60L*1000L)
+            throw new Exception("Binance fiyatı güncel değil: "+symbol);
         JSONArray k=getJsonArray("https://api.binance.com/api/v3/klines?symbol="+symbol+"&interval=1d&limit=60");
-        ArrayList<Double> c=new ArrayList<>(), highs=new ArrayList<>(), lows=new ArrayList<>(), vols=new ArrayList<>();
-        for(int i=0;i<k.length();i++){ JSONArray row=k.getJSONArray(i); highs.add(row.getDouble(2)); lows.add(row.getDouble(3)); c.add(row.getDouble(4)); vols.add(row.getDouble(5)); }
+        ArrayList<Double> c=new ArrayList<>(), highs=new ArrayList<>(), lows=new ArrayList<>(), quoteVolumes=new ArrayList<>();
+        for(int i=0;i<k.length();i++){ JSONArray row=k.getJSONArray(i); highs.add(row.getDouble(2)); lows.add(row.getDouble(3)); c.add(row.getDouble(4)); quoteVolumes.add(row.getDouble(7)); }
         double a=atr(highs,lows,c,14), sup=recentLow(lows,20), res=recentHigh(highs,20);
-        Quote quote = new Quote(symbol.replace("USDT",""),format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(vols),a,sup,res,true);
+        double current24hQuoteVolume=t.optDouble("quoteVolume",0.0);
+        Quote quote = new Quote(symbol.replace("USDT",""),format(price),price,change,rsi(c),sma(c,20),macd(c),volumeRatio(current24hQuoteVolume,quoteVolumes),a,sup,res,true);
         double rate = getUsdtTryRate();
         quote.tryPrice = rate > 0 ? price * rate : 0.0;
         return quote;
@@ -1635,15 +1882,52 @@ public class MainActivity extends Activity {
 
     private synchronized double getUsdtTryRate() {
         long now = System.currentTimeMillis();
-        if (now - usdtTryRateUpdatedAt < AUTO_REFRESH_MS && usdtTryRateUpdatedAt > 0) return usdtTryRate;
-        usdtTryRateUpdatedAt = now;
+        if (usdtTryRateUpdatedAt > 0 && now - usdtTryRateUpdatedAt < AUTO_REFRESH_MS) return usdtTryRate;
+        if (usdtTryRateLastAttemptAt > 0 && now - usdtTryRateLastAttemptAt < 30000L) {
+            return usdtTryRateUpdatedAt > 0 && now - usdtTryRateUpdatedAt <= 12L * 60L * 60L * 1000L
+                    ? usdtTryRate : 0.0;
+        }
+        usdtTryRateLastAttemptAt = now;
+        StringBuilder errors = new StringBuilder();
         try {
             JSONObject root = getJson("https://query1.finance.yahoo.com/v8/finance/chart/USDTRY=X?interval=1d&range=1d");
             JSONObject result = root.getJSONObject("chart").getJSONArray("result").getJSONObject(0);
             double rate = result.getJSONObject("meta").optDouble("regularMarketPrice", 0.0);
-            if (rate > 0) usdtTryRate = rate;
-        } catch (Exception ignored) { }
-        return usdtTryRate;
+            if (rate > 0 && !Double.isNaN(rate) && !Double.isInfinite(rate)) return cacheUsdtTryRate(rate, now);
+            errors.append("Yahoo geçerli kur döndürmedi");
+        } catch (Exception e) {
+            errors.append("Yahoo: ").append(e.getClass().getSimpleName()).append(" ").append(e.getMessage());
+        }
+        try {
+            JSONObject root = getJson("https://open.er-api.com/v6/latest/USD");
+            double rate = root.getJSONObject("rates").optDouble("TRY", 0.0);
+            if (rate > 0 && !Double.isNaN(rate) && !Double.isInfinite(rate)) return cacheUsdtTryRate(rate, now);
+            if (errors.length() > 0) errors.append(" | ");
+            errors.append("Open ER API geçerli kur döndürmedi");
+        } catch (Exception e) {
+            if (errors.length() > 0) errors.append(" | ");
+            errors.append("Open ER API: ").append(e.getClass().getSimpleName()).append(" ").append(e.getMessage());
+        }
+        try {
+            JSONObject root = getJson("https://api.frankfurter.app/latest?from=USD&to=TRY");
+            double rate = root.getJSONObject("rates").optDouble("TRY", 0.0);
+            if (rate > 0 && !Double.isNaN(rate) && !Double.isInfinite(rate)) return cacheUsdtTryRate(rate, now);
+            if (errors.length() > 0) errors.append(" | ");
+            errors.append("Frankfurter geçerli kur döndürmedi");
+        } catch (Exception e) {
+            if (errors.length() > 0) errors.append(" | ");
+            errors.append("Frankfurter: ").append(e.getClass().getSimpleName()).append(" ").append(e.getMessage());
+        }
+        lastUsdtTryRateError = errors.toString();
+        return usdtTryRateUpdatedAt > 0 && now - usdtTryRateUpdatedAt <= 12L * 60L * 60L * 1000L
+                ? usdtTryRate : 0.0;
+    }
+
+    private double cacheUsdtTryRate(double rate, long updatedAt) {
+        usdtTryRate = rate;
+        usdtTryRateUpdatedAt = updatedAt;
+        lastUsdtTryRateError = "";
+        return rate;
     }
 
     private String estimatedTryPrice(Quote q) {
@@ -1701,50 +1985,46 @@ public class MainActivity extends Activity {
     }
 
     private double score(Quote q) {
-        // Dengeli puanlama: tek bir gösterge skoru tavana taşımasın.
-        double s=50;
-        if(q.change>8) s+=12; else if(q.change>3) s+=9; else if(q.change>0) s+=5;
-        else if(q.change<-8) s-=12; else if(q.change<-3) s-=9; else if(q.change<0) s-=5;
-        if(q.rsi>=52 && q.rsi<=65) s+=8;
-        else if(q.rsi>72) s-=10;
-        else if(q.rsi>=68) s-=4;
-        else if(q.rsi<30) s+=3;
-        else if(q.rsi<42) s-=3;
-        if(q.sma>0 && q.price>q.sma) s+=8;
-        else if(q.sma>0) s-=8;
-        double macdPct=q.price>0 ? (q.macd/q.price)*100.0 : 0;
-        if(macdPct>0.25) s+=6;
-        else if(macdPct>0.05) s+=3;
-        else if(macdPct< -0.25) s-=6;
-        else if(macdPct< -0.05) s-=3;
-        if(q.volumeRatio>=2.0) s+=6;
-        else if(q.volumeRatio>=1.3) s+=4;
-        else if(q.volumeRatio<0.5) s-=5;
-        if(q.resistance>0 && q.price>q.resistance) s+=4;
-        return Math.max(10,Math.min(95,s));
+        // Score and the user-visible explanation share exactly the same contributions.
+        int raw=50;
+        for(int value:scoreParts(q)) raw+=value;
+        return Math.max(10,Math.min(95,raw));
     }
 
     private JSONObject getJson(String url) throws Exception {
-        HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
-        c.setConnectTimeout(NETWORK_TIMEOUT_MS); c.setReadTimeout(NETWORK_TIMEOUT_MS);
-        c.setRequestProperty("User-Agent","Mozilla/5.0 HisseCoinTarayici/3.0");
-        int code=c.getResponseCode();
-        if(code<200 || code>=300) throw new Exception("HTTP "+code);
-        BufferedReader br=new BufferedReader(new InputStreamReader(c.getInputStream()));
-        StringBuilder sb=new StringBuilder(); String line;
-        while((line=br.readLine())!=null) sb.append(line);
-        br.close(); c.disconnect();
-        return new JSONObject(sb.toString());
+        HttpURLConnection c=null;
+        try {
+            c=(HttpURLConnection)new URL(url).openConnection();
+            c.setConnectTimeout(NETWORK_TIMEOUT_MS); c.setReadTimeout(NETWORK_TIMEOUT_MS);
+            c.setRequestProperty("User-Agent","Mozilla/5.0 HisseCoinTarayici/3.0");
+            int code=c.getResponseCode();
+            if(code<200 || code>=300) throw new Exception("HTTP "+code);
+            try(BufferedReader br=new BufferedReader(new InputStreamReader(c.getInputStream(),"UTF-8"))) {
+                StringBuilder sb=new StringBuilder(); String line;
+                while((line=br.readLine())!=null) sb.append(line);
+                return new JSONObject(sb.toString());
+            }
+        } finally {
+            if(c!=null) c.disconnect();
+        }
     }
 
     private JSONArray getJsonArray(String url) throws Exception {
-        HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
-        c.setConnectTimeout(10000); c.setReadTimeout(15000);
-        c.setRequestProperty("User-Agent","Mozilla/5.0 HisseCoinTarayici/3.0");
-        int code=c.getResponseCode(); if(code<200||code>=300) throw new Exception("HTTP "+code);
-        BufferedReader br=new BufferedReader(new InputStreamReader(c.getInputStream()));
-        StringBuilder sb=new StringBuilder(); String line; while((line=br.readLine())!=null) sb.append(line);
-        br.close(); c.disconnect(); return new JSONArray(sb.toString());
+        HttpURLConnection c=null;
+        try {
+            c=(HttpURLConnection)new URL(url).openConnection();
+            c.setConnectTimeout(10000); c.setReadTimeout(15000);
+            c.setRequestProperty("User-Agent","Mozilla/5.0 HisseCoinTarayici/3.0");
+            int code=c.getResponseCode();
+            if(code<200||code>=300) throw new Exception("HTTP "+code);
+            try(BufferedReader br=new BufferedReader(new InputStreamReader(c.getInputStream(),"UTF-8"))) {
+                StringBuilder sb=new StringBuilder(); String line;
+                while((line=br.readLine())!=null) sb.append(line);
+                return new JSONArray(sb.toString());
+            }
+        } finally {
+            if(c!=null) c.disconnect();
+        }
     }
 
     private ArrayList<Double> toList(JSONArray a) {
@@ -1755,15 +2035,24 @@ public class MainActivity extends Activity {
     }
 
     private double atr(ArrayList<Double> highs, ArrayList<Double> lows, ArrayList<Double> closes, int n) {
-        if(highs.size()<2 || lows.size()<2 || closes.size()<2) return 0;
-        int start=Math.max(1,closes.size()-n);
-        double sum=0; int count=0;
-        for(int i=start;i<closes.size() && i<highs.size() && i<lows.size();i++){
+        int size=Math.min(closes.size(),Math.min(highs.size(),lows.size()));
+        if(n<=0 || size<=n) return 0;
+        // ATR14 uses Wilder's RMA smoothing, not a simple average of only the latest 14 bars.
+        double value=0;
+        for(int i=1;i<=n;i++){
             double prev=closes.get(i-1);
-            double tr=Math.max(highs.get(i)-lows.get(i),Math.max(Math.abs(highs.get(i)-prev),Math.abs(lows.get(i)-prev)));
-            if(tr>0){sum+=tr;count++;}
+            double tr=Math.max(highs.get(i)-lows.get(i),
+                    Math.max(Math.abs(highs.get(i)-prev),Math.abs(lows.get(i)-prev)));
+            value+=tr;
         }
-        return count>0?sum/count:0;
+        value/=n;
+        for(int i=n+1;i<size;i++){
+            double prev=closes.get(i-1);
+            double tr=Math.max(highs.get(i)-lows.get(i),
+                    Math.max(Math.abs(highs.get(i)-prev),Math.abs(lows.get(i)-prev)));
+            value=(value*(n-1)+tr)/n;
+        }
+        return value;
     }
 
     private double recentLow(ArrayList<Double> a,int n){
@@ -1785,9 +2074,14 @@ public class MainActivity extends Activity {
     }
 
     private double ema(ArrayList<Double> a,int n) {
-        if(a.isEmpty()) return 0;
-        double e=a.get(0), k=2.0/(n+1);
-        for(int i=1;i<a.size();i++) e=a.get(i)*k+e*(1-k);
+        if(a.isEmpty() || n<=0) return 0;
+        if(a.size()<n) return a.get(a.size()-1);
+        // Standard EMA initialization: seed with the first n-period SMA.
+        double e=0;
+        for(int i=0;i<n;i++) e+=a.get(i);
+        e/=n;
+        double k=2.0/(n+1);
+        for(int i=n;i<a.size();i++) e=a.get(i)*k+e*(1-k);
         return e;
     }
 
@@ -1796,12 +2090,24 @@ public class MainActivity extends Activity {
         return ema(a,12)-ema(a,26);
     }
 
-    private double volumeRatio(ArrayList<Double> v) {
-        if(v.size()<21) return 1.0;
-        double avg=0;
-        for(int i=v.size()-21;i<v.size()-1;i++) avg+=v.get(i);
+    private double volumeRatio(ArrayList<Double> v, boolean excludeLastIncomplete) {
+        int end=v.size()-(excludeLastIncomplete?1:0);
+        if(end<21) return 1.0;
+        double current=v.get(end-1), avg=0;
+        for(int i=end-21;i<end-1;i++) avg+=v.get(i);
         avg/=20.0;
-        return avg>0?v.get(v.size()-1)/avg:1.0;
+        return avg>0?current/avg:1.0;
+    }
+
+    private double volumeRatio(double current24hQuoteVolume, ArrayList<Double> completedDailyQuoteVolumes) {
+        // Binance ticker volume is rolling 24h quote volume; compare it with completed daily
+        // quote-volume candles, never with the still-forming UTC daily candle.
+        int end=completedDailyQuoteVolumes.size()-1;
+        if(current24hQuoteVolume<=0 || end<20) return 1.0;
+        double avg=0;
+        for(int i=end-20;i<end;i++) avg+=completedDailyQuoteVolumes.get(i);
+        avg/=20.0;
+        return avg>0?current24hQuoteVolume/avg:1.0;
     }
 
     private double sma(ArrayList<Double> a,int n) {
@@ -1809,10 +2115,26 @@ public class MainActivity extends Activity {
     }
 
     private double rsi(ArrayList<Double> a) {
-        if(a.size()<15)return 50; double gain=0,loss=0;
-        int start=Math.max(1,a.size()-14);
-        for(int i=start;i<a.size();i++){double d=a.get(i)-a.get(i-1); if(d>0)gain+=d;else loss-=d;}
-        if(loss==0)return 100; double rs=(gain/14)/(loss/14); return 100-(100/(1+rs));
+        if(a.size()<15)return 50;
+        // Standard 14-period Wilder RSI, using the available history for stable smoothing.
+        double avgGain=0,avgLoss=0;
+        for(int i=1;i<=14;i++){
+            double change=a.get(i)-a.get(i-1);
+            if(change>0)avgGain+=change;
+            else avgLoss-=change;
+        }
+        avgGain/=14.0;
+        avgLoss/=14.0;
+        for(int i=15;i<a.size();i++){
+            double change=a.get(i)-a.get(i-1);
+            double gain=Math.max(0,change);
+            double loss=Math.max(0,-change);
+            avgGain=(avgGain*13.0+gain)/14.0;
+            avgLoss=(avgLoss*13.0+loss)/14.0;
+        }
+        if(avgLoss==0)return avgGain==0?50:100;
+        double rs=avgGain/avgLoss;
+        return 100.0-100.0/(1.0+rs);
     }
 
     private String format(double x){return String.format(Locale.US,"%.4f",x);}
