@@ -224,6 +224,14 @@ public class EarlyOpportunityActivity extends Activity {
         boolean divergence=positiveRsiDivergence(a.close);
         double resistance=highest(a.high,Math.max(0,n-21),n-1);
         double resistanceDistance=resistance>0?(resistance/displayPrice-1)*100:999;
+        // Avoid chasing overheated moves; RSI 75 or higher blocks entry confirmation.
+        boolean rsiNotOverheated=rsi15<75.0 && rsi1h<75.0;
+        // A live tick above resistance is not enough: require the last completed 15m
+        // candle and the live price to hold at least 0.20% above prior resistance.
+        boolean closedBreakout=resistance>0 && last>=resistance*1.002;
+        boolean breakoutCandidate=resistanceDistance<=-0.20 && closedBreakout
+                && vol15>=1.2 && vol1h>=1.2 && rsi15>=50 && rsi1h>=50
+                && rsiNotOverheated;
         // Compare the latest closed 1h RSI with the immediately preceding closed 1h candle.
         double rsi1hPrevious=rsiAt(b.close,b.close.size()-1);
         boolean hourlyRsiRising=rsi1h>=rsi1hPrevious+1.0;
@@ -249,7 +257,7 @@ public class EarlyOpportunityActivity extends Activity {
         if(resistanceDistance>=2.0) levelPoints+=10;
         else if(resistanceDistance>=1.0) levelPoints+=7;
         else if(resistanceDistance>=0.5) levelPoints+=4;
-        else if(resistanceDistance<0 && vol1h>=1.2 && rsi1h>=50) levelPoints+=6;
+        else if(resistanceDistance<0 && breakoutCandidate) levelPoints+=6;
         else if(resistanceDistance<0) levelPoints+=2;
         levelPoints=Math.min(20,levelPoints);
 
@@ -258,20 +266,19 @@ public class EarlyOpportunityActivity extends Activity {
                 : sma20>sma50 ? 8 : 0;
 
         int patternPoints = (divergence?8:0) + ((hammer||engulf||morning)?7:0);
-        boolean breakoutCandidate=resistanceDistance<0 && vol1h>=1.2 && rsi1h>=50;
         double rewardRisk = supportDistance>0 ? resistanceDistance/supportDistance : 0;
-        int riskRewardPoints = resistanceDistance<0
-                ? (breakoutCandidate?8:0)
+        int riskRewardPoints = breakoutCandidate ? 8
+                : resistanceDistance<0 ? 0
                 : rewardRisk>=2.0?10:rewardRisk>=1.5?7:rewardRisk>=1.0?4:0;
 
         double score=hourlyPoints+volumePoints+levelPoints+trendPoints+patternPoints+riskRewardPoints;
         score=Math.max(0,Math.min(100,score));
-        // Confirmation is stricter than the score: both timeframes must show volume,
-        // and the available move to resistance must justify the distance to support.
+        // A breakout bypasses the normal reward/risk calculation only after a
+        // completed 15m close confirms it; a live-price poke cannot.
         boolean acceptableRiskReward = breakoutCandidate || rewardRisk>=1.0;
-        // A technical confirmation must also meet the existing 60-point quality band.
-        boolean confirmed = score>=60 && rsi1h>=50 && rsi15>=50 && hourlyRsiRising
-                && vol15>=1.2 && vol1h>=1.2 && acceptableRiskReward
+        // Confirmation requires non-overheated RSI and volume on both timeframes.
+        boolean confirmed = score>=60 && rsi1h>=50 && rsi15>=50 && rsiNotOverheated
+                && hourlyRsiRising && vol15>=1.2 && vol1h>=1.2 && acceptableRiskReward
                 && (last1h>sma20 || breakoutCandidate);
 
         StringBuilder reasons=new StringBuilder();
@@ -287,6 +294,10 @@ public class EarlyOpportunityActivity extends Activity {
             if(score<60) reasons.append("Toplam puan 60 altında • ");
             if(rsi1h<50) reasons.append("Saatlik RSI 50 altında • ");
             if(rsi15<50) reasons.append("15dk RSI 50 altında • ");
+            if(rsi1h>=75) reasons.append("Saatlik RSI aşırı yüksek (75+) • ");
+            if(rsi15>=75) reasons.append("15dk RSI aşırı yüksek (75+) • ");
+            if(resistanceDistance<0 && !closedBreakout) reasons.append("Direnç üstü 15dk kapanış teyidi yok • ");
+            else if(resistanceDistance<0 && !breakoutCandidate) reasons.append("Kırılım teyidi yetersiz • ");
             if(vol15<1.2) reasons.append("15dk hacim teyidi yok • ");
             if(vol1h<1.2) reasons.append("1s hacim teyidi yok • ");
             if(!hourlyRsiRising) reasons.append("Saatlik RSI yükselişi yok • ");
